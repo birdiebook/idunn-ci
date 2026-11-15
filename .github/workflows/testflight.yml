@@ -1,0 +1,183 @@
+# SPEGELNS CI (BESLUT B122). Den här filen ligger i det privata repot som spegel/workflows/testflight.yml och läggs
+# av tools/spegla.py på .github/workflows/testflight.yml i den publika spegeln. Bygger appen för telefonen, signerar
+# den och laddar upp till TestFlight, som ios-testflight i codemagic.yaml, men på GitHubs macOS-maskiner: spegeln är
+# publik, så minuterna kostar inget. Samma väg som SwingLabs testflight.yml.
+#
+# Startas bara för hand ("Run workflow" eller API:t), efter ett ja, och bara från main. Aldrig av push, tagg eller
+# pull request: då når ingen utomstående hemligheterna. Hemligheterna ges bara till stegen som behöver dem.
+#
+# Bygget kräver grönt för det speglade commitet: testerna (resultat/<privat-hash>.txt) och appens bygge
+# (resultat/<privat-hash>-app.txt) på grenen ci-resultat. Utfallet läggs som resultat/<privat-hash>-testflight.txt.
+#
+# Hemligheterna (Settings -> Secrets and variables -> Actions i spegeln):
+#   APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_KEY_IDENTIFIER, APP_STORE_CONNECT_PRIVATE_KEY (hela .p8-filen)
+#   CERTIFICATE_PRIVATE_KEY (appens signeringsnyckel, base64 av pem-filen)
+name: testflight
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    if: github.repository == 'birdiebook/idunn-ci'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - name: Bara från main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "FEL: TestFlight byggs bara från main, inte från $GITHUB_REF." >&2; exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Hemligheterna finns
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+        run: |
+          for n in APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_PRIVATE_KEY CERTIFICATE_PRIVATE_KEY; do
+            if [ -z "${!n}" ]; then echo "FEL: hemligheten $n saknas i spegelns Actions-hemligheter." >&2; exit 1; fi
+          done
+          if ! printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | grep -q "BEGIN PRIVATE KEY"; then
+            echo "FEL: APP_STORE_CONNECT_PRIVATE_KEY är inte hela .p8-filen (med raderna BEGIN och END)." >&2; exit 1
+          fi
+
+      - name: Testerna och appens bygge är gröna för det som byggs
+        run: |
+          set -euo pipefail
+          PRIVAT=$(tr -d '[:space:]' < PRIVAT_COMMIT)
+          git fetch -q origin ci-resultat:refs/remotes/origin/ci-resultat
+          for s in "" "-app"; do
+            FIL="resultat/${PRIVAT}${s}.txt"
+            if ! RES=$(git show "origin/ci-resultat:${FIL}" 2>/dev/null); then
+              echo "FEL: ${FIL} saknas på ci-resultat. Vänta in spegelns CI för ${PRIVAT}." >&2; exit 1
+            fi
+            echo "$RES" | head -3
+            if echo "$RES" | grep -q "RÖTT" || ! echo "$RES" | grep -q "GRÖNT"; then
+              echo "FEL: ${FIL} är inte grönt." >&2; exit 1
+            fi
+          done
+          echo "PRIVAT=${PRIVAT}" >> "$GITHUB_ENV"
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verktygen (låsta versioner)
+        run: |
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+          pip install "codemagic-cli-tools==0.70.0"
+
+      - name: Generera Xcode-projektet
+        run: xcodegen generate
+
+      # Senaste TestFlight-bygget + 1, inte Actions räknare: tidigare byggen har laddats upp på annat sätt, och en
+      # krock fäller uppladdningen först efter hela bygget. Appens Apple-id slås upp ur bundle-id:t.
+      - name: Sätt buildnummer
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          APPLE_ID=$(app-store-connect apps list \
+            --bundle-id-identifier se.birdiebook.idun --strict-match-identifier --json \
+            | python3 -c '
+          import json, sys
+          appar = json.load(sys.stdin)
+          if len(appar) != 1:
+              sys.exit(f"FEL: väntade en app för se.birdiebook.idun i App Store Connect, fick {len(appar)}")
+          print(appar[0]["id"])
+          ')
+          SENASTE=$(app-store-connect get-latest-testflight-build-number "$APPLE_ID")
+          NYTT=$((SENASTE + 1))
+          echo "TestFlight: senaste bygget $SENASTE, det här blir $NYTT"
+          agvtool new-version -all "$NYTT"
+          echo "BYGGNUMMER=${NYTT}" >> "$GITHUB_ENV"
+
+      - name: Hämta signering
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          keychain initialize
+          echo "$CERTIFICATE_PRIVATE_KEY" | base64 --decode > "$RUNNER_TEMP/cert_key.pem"
+          grep -q "BEGIN.*PRIVATE KEY" "$RUNNER_TEMP/cert_key.pem"
+          app-store-connect fetch-signing-files "se.birdiebook.idun" \
+            --type IOS_APP_STORE \
+            --certificate-key=@file:"$RUNNER_TEMP/cert_key.pem" \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Arkivera
+        run: |
+          set -o pipefail
+          xcode-project build-ipa --project "Idunn.xcodeproj" --scheme "Idunn"
+
+      - name: Ladda upp till TestFlight
+        # Den interna testgruppen har automatisk distribution och får bygget av sig själv.
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: app-store-connect publish --path "build/ios/ipa/*.ipa"
+
+      - name: Städa
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/cert_key.pem"
+          keychain use-login || true
+
+      - name: Lägg utfallet på ci-resultat
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          PRIVAT=$(tr -d '[:space:]' < "${GITHUB_WORKSPACE}/PRIVAT_COMMIT")
+          {
+            echo "${PRIVAT} spegel $(date -u +%FT%TZ) run ${GITHUB_RUN_ID}"
+            echo "== testflight (arkiv, signering, uppladdning)"
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "GRÖNT: bygge ${BYGGNUMMER:-?} uppladdat till TestFlight"
+            else
+              echo "RÖTT: bygget nådde inte TestFlight (se körningen ${GITHUB_RUN_ID})"
+            fi
+          } > /tmp/resultat.txt
+          cat /tmp/resultat.txt
+          for i in 1 2 3 4 5; do
+            rm -rf /tmp/r && mkdir /tmp/r && cd /tmp/r && git init -q
+            git remote add origin "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+            if git fetch -q origin ci-resultat 2>/dev/null; then git checkout -q -b ci-resultat FETCH_HEAD; else git checkout -q --orphan ci-resultat; fi
+            mkdir -p resultat && cp /tmp/resultat.txt "resultat/${PRIVAT}-testflight.txt"
+            git add -A && git -c user.name=idunn-ci -c user.email=idunn-ci@users.noreply.github.com commit -qm "testflight ${PRIVAT}"
+            git push -q origin ci-resultat && break
+            sleep $((i * 3))
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: xcodebuild-loggar
+          path: /tmp/xcodebuild_logs/*.log
+          if-no-files-found: ignore
