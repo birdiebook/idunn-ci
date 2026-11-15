@@ -28,9 +28,12 @@ struct PassView: View {
                                         startUte: { controller.startUte() },
                                         exportMedSpår: { controller.exportFile($0, medSpår: true) },
                                         startSteptest: { controller.startSteptest(höjdCm: $0) },
-                                        sättProfil: { kondition.sätt(profil: $0) }),
+                                        sättProfil: { kondition.sätt(profil: $0) },
+                                        läggTillFörslag: { controller.läggTill($0, typ: $1) },
+                                        taBortFörslag: { controller.taBortFörslag($0) }),
                    kondition: PassKondition(modell: kondition, slut: controller.steptestSlut,
-                                          slag: controller.steptestSlag))
+                                          slag: controller.steptestSlag),
+                   förslag: controller.förslag)
         .alert("Pass", isPresented: Binding(
             get: { controller.problem != nil },
             set: { if !$0 { controller.problem = nil } }
@@ -59,6 +62,10 @@ struct PassActions {
     var startSteptest: (Double) -> Void = { _ in }
     /// BESLUT B110. Profilen ändrades i formuläret som bladet före steptestet länkar till.
     var sättProfil: (FitnessProfile) -> Void = { _ in }
+    /// BESLUT B121. Lägger ett förslag till som ett pass av vald typ.
+    var läggTillFörslag: (PassDetection.Candidate, PassKind) -> Void = { _, _ in }
+    /// BESLUT B121. Tar bort ett förslag för gott.
+    var taBortFörslag: (PassDetection.Candidate) -> Void = { _ in }
 }
 
 /// Formen på passets siffror: samma överallt, så att en tid alltid läses likadant.
@@ -108,20 +115,29 @@ struct PassScreen: View {
     var actions = PassActions()
     /// BESLUT B110. Konditionen och steptestets värden.
     var kondition = PassKondition()
+    /// BESLUT B121 · METOD M69. Förslag ur bandets historik, senaste först.
+    let förslag: [PassDetection.Candidate]
 
     @State private var openedID: UUID?
+    @State private var valtFörslag: Förslagsval?
     @State private var steptestBlad = false
     @State private var konditionÖppen = false
 
     /// Egen init, så att `@State private` inte kan göra den osynlig för andra filer.
     init(phase: PassRecorder.Phase, pass: Pass?, now: Date, saved: [Pass], actions: PassActions = PassActions(),
-         kondition: PassKondition = PassKondition()) {
+         kondition: PassKondition = PassKondition(), förslag: [PassDetection.Candidate] = []) {
         self.phase = phase
         self.pass = pass
         self.now = now
         self.saved = saved
         self.actions = actions
         self.kondition = kondition
+        self.förslag = förslag
+    }
+
+    private struct Förslagsval: Identifiable {
+        let id: Int
+        let förslag: PassDetection.Candidate
     }
 
     /// Så länge utan pulsprov som visar raden "Bandet hörs inte".
@@ -172,6 +188,20 @@ struct PassScreen: View {
                 .presentationDetents([.large])
                 .presentationBackground(Tema.bg)
         }
+        // BESLUT B121. Bladet för ett förslag: välj typ och lägg till, eller ta bort.
+        .sheet(item: $valtFörslag) { (val: Förslagsval) in
+            FörslagBlad(förslag: val.förslag, nu: now,
+                        läggTill: { (typ: PassKind) -> Void in
+                            actions.läggTillFörslag(val.förslag, typ)
+                            valtFörslag = nil
+                        },
+                        taBort: {
+                            actions.taBortFörslag(val.förslag)
+                            valtFörslag = nil
+                        })
+                .presentationDetents([.medium])
+                .presentationBackground(Tema.bg)
+        }
         .sensoryFeedback(.impact, trigger: phase)
     }
 
@@ -212,6 +242,25 @@ struct PassScreen: View {
                 }
                 .buttonStyle(Tryckyta())
                 .accessibilityLabel("Starta steptest")
+            }
+
+            // BESLUT B121 · METOD M69. Förslag ur bandets historik, före de sparade passen.
+            if !förslag.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Förslag").font(.headline)
+                    Text("Hittade i bandets historik. Lägg till dem du vill ha kvar.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, 4)
+                    ForEach(förslag, id: \.startMinute) { (f: PassDetection.Candidate) in
+                        Button { valtFörslag = Förslagsval(id: f.startMinute, förslag: f) } label: {
+                            FörslagRad(förslag: f, nu: now)
+                        }
+                        .buttonStyle(.plain)
+                        if f.startMinute != förslag.last?.startMinute { Divider() }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if !saved.isEmpty {
@@ -765,5 +814,131 @@ private struct KindPicker: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+}
+
+// MARK: - Förslag (BESLUT B121 · METOD M69)
+
+/// Texterna i förslagen: rena funktioner, så att provet kan ge en fast tid.
+enum PassForslagText {
+    private static let månader: [String] = ["jan", "feb", "mar", "apr", "maj", "jun",
+                                            "jul", "aug", "sep", "okt", "nov", "dec"]
+
+    /// "Bastu · 22 min", eller "Pass · 41 min" när typen inte gissats.
+    static func rubrik(_ f: PassDetection.Candidate) -> String {
+        "\(f.kind?.displayName ?? "Pass") · \(f.minutes) min"
+    }
+
+    /// "Idag 17:05–17:46", "Igår 17:05–17:46" eller "13 nov 17:05–17:46", räknat i `zon`.
+    static func tid(_ f: PassDetection.Candidate, zon: TimeZone = .current, nu: Date = Date()) -> String {
+        var kal = Calendar(identifier: .gregorian)
+        kal.timeZone = zon
+        let dag: Date = kal.startOfDay(for: f.start)
+        let idag: Date = kal.startOfDay(for: nu)
+        let skillnad: Int = kal.dateComponents([.day], from: dag, to: idag).day ?? 0
+        let prefix: String
+        if skillnad == 0 {
+            prefix = "Idag"
+        } else if skillnad == 1 {
+            prefix = "Igår"
+        } else {
+            let c = kal.dateComponents([.day, .month], from: f.start)
+            prefix = "\(c.day ?? 1) \(månader[max(0, min(11, (c.month ?? 1) - 1))])"
+        }
+        return "\(prefix) \(klockslag(f.start, kal))–\(klockslag(f.end, kal))"
+    }
+
+    private static func klockslag(_ t: Date, _ kal: Calendar) -> String {
+        let c = kal.dateComponents([.hour, .minute], from: t)
+        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+    }
+}
+
+/// En rad i listan Förslag: ikon, typ och längd, tid, och en pil.
+struct FörslagRad: View {
+    let förslag: PassDetection.Candidate
+    var nu: Date = Date()
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(.title2)
+                .frame(width: 32)
+                .foregroundStyle(Tema.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(PassForslagText.rubrik(förslag)).font(.body)
+                Text(PassForslagText.tid(förslag, nu: nu))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+}
+
+/// Bladet för ett förslag: typen väljs (den gissade är förvald), och förslaget läggs till eller tas bort.
+struct FörslagBlad: View {
+    let förslag: PassDetection.Candidate
+    var nu: Date = Date()
+    let läggTill: (PassKind) -> Void
+    let taBort: () -> Void
+
+    @State private var typ: PassKind?
+
+    init(förslag: PassDetection.Candidate, nu: Date = Date(), läggTill: @escaping (PassKind) -> Void,
+         taBort: @escaping () -> Void) {
+        self.förslag = förslag
+        self.nu = nu
+        self.läggTill = läggTill
+        self.taBort = taBort
+        _typ = State(initialValue: förslag.kind)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Lägg till passet?").font(.title3.weight(.semibold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(PassForslagText.rubrik(förslag))
+                Text(PassForslagText.tid(förslag, nu: nu))
+            }
+            .foregroundStyle(.secondary)
+
+            Text("Typ").font(.headline)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
+                ForEach(PassKind.allCases, id: \.self) { (k: PassKind) in
+                    Button { typ = k } label: {
+                        Text(k.displayName)
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .foregroundStyle(typ == k ? Color.white : Tema.text)
+                            .background(RoundedRectangle(cornerRadius: 10)
+                                .fill(typ == k ? Tema.accent : Tema.card))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Text("Pulsen fylls ur bandets historik.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Button {
+                if let t = typ { läggTill(t) }
+            } label: {
+                Text("Lägg till").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(typ == nil)
+
+            Button(role: .destructive, action: taBort) {
+                Text("Ta bort förslaget").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(20)
+        .presentationDetents([.medium])
     }
 }

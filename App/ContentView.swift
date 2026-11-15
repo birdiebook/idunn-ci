@@ -57,14 +57,27 @@ struct ContentView: View {
             // BESLUT B117 · METOD M68. Nätterna lästes om, alltså har dygnens filer ändrats: pass som väntar på
             // bandets historik fylls.
             PassController.shared.fillFromHistory()
+            // BESLUT B121. Förslagen letas om ur samma historik.
+            PassController.shared.hittaFörslag(vilopuls: KonditionModell.shared.vilopuls,
+                                               maxpuls: KonditionModell.shared.maxpulsIdag)
         }
         // BESLUT B117 · METOD M68. En hämtning från bandet är slut: dess historik kan fylla ett pass som väntar.
         .onReceive(recorder.$fetching) { (pågår: Bool) -> Void in
-            if !pågår { PassController.shared.fillFromHistory() }
+            if !pågår {
+                PassController.shared.fillFromHistory()
+                // BESLUT B121. Ny historik kan ge nya förslag.
+                PassController.shared.hittaFörslag(vilopuls: KonditionModell.shared.vilopuls,
+                                                   maxpuls: KonditionModell.shared.maxpulsIdag)
+            }
         }
         // BESLUT B110 · METOD M62. Mätningarna av VO2 max räknas om ur de sparade passen när de ändras.
         .onReceive(PassController.shared.$saved) { (pass: [Pass]) -> Void in
             KonditionModell.shared.sätt(pass: pass)
+        }
+        // BESLUT B121. Vilopulsen (eller maxpulsen) blev känd eller ändrades: leta förslag igen.
+        .onReceive(KonditionModell.shared.$vilopuls.receive(on: RunLoop.main)) { _ in
+            PassController.shared.hittaFörslag(vilopuls: KonditionModell.shared.vilopuls,
+                                               maxpuls: KonditionModell.shared.maxpulsIdag)
         }
         // BESLUT B111. Födelseår och kön finns på fliken Profil; konditionen räknar med dem.
         .onReceive(ProfilModell.shared.$person) { (person: Person?) -> Void in

@@ -29,6 +29,8 @@ final class KonditionModell: ObservableObject {
     @Published private(set) var tempopuls: SteadyPulse.Series? = nil
     /// BESLUT B110 · METOD M64. Talet som visas i vardagen: aktiva mätningar, annars den passiva skattningen.
     @Published private(set) var visat: FitnessSummary.Shown? = nil
+    /// METOD M61. Vilopulsen för idag (medianen av de senaste nätterna); nil utan sju nätter. Används av förslagen (BESLUT B121).
+    @Published private(set) var vilopuls: Double? = nil
 
     /// BESLUT B111. Födelseår och kön finns på fliken Profil (`ProfilModell.person`) och matas hit; allt som räknas här
     /// använder dem i stället för fälten i `lager.profile`.
@@ -140,6 +142,9 @@ final class KonditionModell: ObservableObject {
     /// METOD M60. Maxpulsen i slag/min, eller `nil`.
     var maxpuls: Double? { maxpulsUnderlag?.bpm }
 
+    /// BESLUT B121. Maxpulsen för idag, för förslagen i passlistan.
+    var maxpulsIdag: Double? { räknadProfil.maxPulse(year: FitnessRules.year(ofDay: Self.idag()))?.bpm }
+
     /// METOD M64. Referensen för profilens kön och ålder, eller `nil` utan båda (eller utanför 20–59 år).
     var referens: KonditionReferens? {
         let profil: FitnessProfile = räknadProfil
@@ -189,6 +194,8 @@ final class KonditionModell: ObservableObject {
     private func räkna() {
         let idag: Int = Self.idag()
         skattning = PassiveFitness.estimate(profile: räknadProfil, nights: nätter, day: idag)
+        // BESLUT B121. Vilopulsen för förslagen, oavsett om maxpulsen finns.
+        vilopuls = PassiveFitness.restingPulse(nätter, day: idag)?.pulse
         // BESLUT B110. Utan maxpuls ingen mätning: båda metoderna räknar mot den.
         var ny: [FitnessMeasurement] = []
         var tempolista: [SteadyPulse.PassSegments] = []

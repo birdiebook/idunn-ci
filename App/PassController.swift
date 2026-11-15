@@ -68,6 +68,15 @@ final class PassController: ObservableObject {
     private var historikPågår = false
     private var historikSedd: [UUID: [String: Int]] = [:]
 
+    /// BESLUT B121 · METOD M69. Förslagen ur bandets historik för de två senaste dygnen, senaste först. Inget läggs
+    /// till tyst: ett förslag blir ett pass först med `läggTill`.
+    @Published private(set) var förslag: [PassDetection.Candidate] = []
+    private var förslagPågår = false
+    /// Bandets poster från senaste läsningen, för att fylla pulsen i ett tillagt förslag.
+    private var förslagsposter: [PassHistory.Reading] = []
+    /// De borttagna förslagen (läses i `init`, inte i provet).
+    private var förslagslager: PassSuggestions.Store = PassSuggestions.Store()
+
     private init() {
         metronom.påSlag = { [weak self] (n: Int) -> Void in self?.steptestSlag = n }
         // Kontrollen med block, inte `#selector`: klassen ärver inte från NSObject.
@@ -76,7 +85,10 @@ final class PassController: ObservableObject {
         NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil,
                                                queue: .main) { [weak self] _ in self?.appBecameActive() }
         // Inte i provet (IdunnProv körs inuti appen): där finns inga pass att läsa in och inget band.
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil { load() }
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            förslagslager = PassForslag.läsLager()
+            load()
+        }
     }
 
     // MARK: Knapparna
@@ -267,6 +279,52 @@ final class PassController: ObservableObject {
             ändrad = true
         }
         if ändrad { saved = lista }
+    }
+
+    // MARK: Förslag (BESLUT B121, METOD M69)
+
+    /// Letar pass i bandets historik för de två senaste dygnen och visar dem som förslag. Utan vilopuls eller maxpuls
+    /// inga förslag. Läsningen görs på filkön; ett förslag som tagits bort kommer inte tillbaka.
+    func hittaFörslag(vilopuls: Double?, maxpuls: Double?) {
+        guard let vila = vilopuls, let max = maxpuls else {
+            förslag = []
+            return
+        }
+        guard !förslagPågår else { return }
+        förslagPågår = true
+        var passen: [Pass] = saved
+        if let p = state.pass { passen.append(p) }
+        let lager: PassSuggestions.Store = förslagslager
+        ioQueue.async { [weak self] in
+            let läst = PassForslag.sekunder(now: Date())
+            let hittade: [PassDetection.Candidate] = PassSuggestions.suggestions(
+                seconds: läst.sekunder, restingPulse: vila, maxPulse: max, passes: passen, store: lager)
+            let nyast: [PassDetection.Candidate] = hittade.sorted {
+                (a: PassDetection.Candidate, b: PassDetection.Candidate) -> Bool in a.startMinute > b.startMinute
+            }
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.förslag = nyast
+                self.förslagsposter = läst.poster
+                self.förslagPågår = false
+            }
+        }
+    }
+
+    /// Lägger ett förslag till som ett pass av typen `typ`, sparat som ett färdigt pass, och tar bort förslaget ur listan.
+    func läggTill(_ f: PassDetection.Candidate, typ: PassKind) {
+        let p: Pass = PassSuggestions.pass(from: f, kind: typ, readings: förslagsposter)
+        persist(p)
+        saved = Self.newestFirst(saved.filter { $0.id != p.id } + [p])
+        förslag.removeAll { $0 == f }
+    }
+
+    /// Tar bort ett förslag för gott.
+    func taBortFörslag(_ f: PassDetection.Candidate) {
+        förslagslager.dismiss(f)
+        let lager: PassSuggestions.Store = förslagslager
+        ioQueue.async { PassForslag.skriv(lager) }
+        förslag.removeAll { $0 == f }
     }
 
     /// Fasen byttes: slå på eller av pulsen och timern, spara, och lägg ett färdigt pass i listan.
