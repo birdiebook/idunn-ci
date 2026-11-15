@@ -24,15 +24,25 @@ public enum PassKind: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// BESLUT B117 · METOD M68
+/// Varifrån ett pulsprov kom, när det inte kom live under passet.
+public enum PassSampleSource: String, Codable, Sendable {
+    /// Ur bandets egen historik, läst i efterhand (`PassHistory.fill`).
+    case history = "historik"
+}
+
 /// BESLUT B58 · METOD M47
-/// Ett pulsprov: tiden det kom och slag per minut.
+/// Ett pulsprov: tiden det kom och slag per minut. `source` är `nil` för ett prov som kom live under passet,
+/// och nyckeln skrivs då inte: en fil från ett äldre bygge saknar den och läses som live (BESLUT B117).
 public struct PassSample: Codable, Equatable, Sendable {
     public var t: Date
     public var bpm: Int
+    public var source: PassSampleSource?
 
-    public init(t: Date, bpm: Int) {
+    public init(t: Date, bpm: Int, source: PassSampleSource? = nil) {
         self.t = t
         self.bpm = bpm
+        self.source = source
     }
 }
 
@@ -84,10 +94,13 @@ public struct Pass: Codable, Equatable, Identifiable, Sendable {
     public var track: [TrackPoint]?
     /// BESLUT B106 · METOD M62. Stegets höjd i cm när passet är ett steptest, annars `nil`.
     public var stepHeightCm: Double?
+    /// BESLUT B117 · METOD M68. Så långt hade bandets historik nått när passet senast fylldes ur den; `nil` innan
+    /// någon historik efter passets slut är sedd. En fil från ett äldre bygge saknar nyckeln.
+    public var historyThrough: Date?
 
     public init(id: UUID = UUID(), start: Date, stop: Date? = nil, afterEnd: Date? = nil,
                 kind: PassKind? = nil, samples: [PassSample] = [], track: [TrackPoint]? = nil,
-                stepHeightCm: Double? = nil) {
+                stepHeightCm: Double? = nil, historyThrough: Date? = nil) {
         self.id = id
         self.start = start
         self.stop = stop
@@ -96,6 +109,7 @@ public struct Pass: Codable, Equatable, Identifiable, Sendable {
         self.samples = samples
         self.track = track
         self.stepHeightCm = stepHeightCm
+        self.historyThrough = historyThrough
     }
 
     /// Passet mäts ute, med spår.

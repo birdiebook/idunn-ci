@@ -54,6 +54,13 @@ struct ContentView: View {
             KonditionModell.shared.sätt(nätter: recorder.summaries.compactMap(\.idunNight))
             // BESLUT B105. Profilens nattmarkörer räknas ur samma nätter.
             ProfilModell.shared.sätt(nätter: recorder.summaries.compactMap(\.idunNight))
+            // BESLUT B117 · METOD M68. Nätterna lästes om, alltså har dygnens filer ändrats: pass som väntar på
+            // bandets historik fylls.
+            PassController.shared.fillFromHistory()
+        }
+        // BESLUT B117 · METOD M68. En hämtning från bandet är slut: dess historik kan fylla ett pass som väntar.
+        .onReceive(recorder.$fetching) { (pågår: Bool) -> Void in
+            if !pågår { PassController.shared.fillFromHistory() }
         }
         // BESLUT B110 · METOD M62. Mätningarna av VO2 max räknas om ur de sparade passen när de ändras.
         .onReceive(PassController.shared.$saved) { (pass: [Pass]) -> Void in

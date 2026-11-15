@@ -63,6 +63,10 @@ final class PassController: ObservableObject {
     /// aldrig ger en andra fil för samma pass.
     private var fileNames: [UUID: String] = [:]
     private let ioQueue = DispatchQueue(label: "se.birdiebook.idun.pass", qos: .utility)
+    /// BESLUT B117 · METOD M68. Fyllningen ur bandets historik: en i taget, och per pass de dygn som redan lästs
+    /// (med storleken de hade), så att ett dygn som inte vuxit inte läses om.
+    private var historikPågår = false
+    private var historikSedd: [UUID: [String: Int]] = [:]
 
     private init() {
         metronom.påSlag = { [weak self] (n: Int) -> Void in self?.steptestSlag = n }
@@ -224,6 +228,45 @@ final class PassController: ObservableObject {
 
     private func appBecameActive() {
         if state.wantsPulse { tick() }
+        fillFromHistory()
+    }
+
+    // MARK: Pulsen ur bandets historik (BESLUT B117, METOD M68)
+
+    /// Fyller sparade pass som har luckor med pulsen ur bandets historik, när den finns i dygnens filer. Anropas när
+    /// appen öppnas, när passen lästs in, när ett pass blivit färdigt och när nätterna lästs om (då har dygnens filer
+    /// ändrats). Läsningen görs på filkön; ett pass som inte ändras skrivs inte om. Idempotent (`PassHistory.fill`).
+    func fillFromHistory() {
+        guard !historikPågår else { return }
+        let nu = Date()
+        let väntar: [Pass] = saved.filter { PassHistory.awaitsHistory($0, now: nu) }
+        guard !väntar.isEmpty else { return }
+        historikPågår = true
+        let sedd = historikSedd
+        ioQueue.async { [weak self] in
+            var fyllda: [(pass: Pass, sedda: [String: Int])] = []
+            for p in väntar {
+                let läst = PassHistorik.läs(p, now: nu, sedda: sedd[p.id] ?? [:])
+                fyllda.append((PassHistory.fill(p, readings: läst.poster, through: läst.nått), läst.sedda))
+            }
+            DispatchQueue.main.async { self?.adoptHistory(fyllda) }
+        }
+    }
+
+    /// Tar emot de fyllda passen: ett pass som ändrats byts i listan och sparas. Ett pass som tagits bort under
+    /// läsningen finns inte kvar i listan och hoppas över.
+    private func adoptHistory(_ fyllda: [(pass: Pass, sedda: [String: Int])]) {
+        historikPågår = false
+        var lista = saved
+        var ändrad = false
+        for f in fyllda {
+            historikSedd[f.pass.id] = f.sedda
+            guard let i = lista.firstIndex(where: { $0.id == f.pass.id }), lista[i] != f.pass else { continue }
+            lista[i] = f.pass
+            persist(f.pass)
+            ändrad = true
+        }
+        if ändrad { saved = lista }
     }
 
     /// Fasen byttes: slå på eller av pulsen och timern, spara, och lägg ett färdigt pass i listan.
@@ -239,6 +282,8 @@ final class PassController: ObservableObject {
             if let p = state.finished {
                 persist(p)
                 saved = Self.newestFirst(saved.filter { $0.id != p.id } + [p])
+                // BESLUT B117. Historiken för passet kan redan finnas (bandet synkade under efterperioden).
+                fillFromHistory()
             }
             // Passet är sparat och visas i listan: tillbaka till vila.
             state.clear()
@@ -357,5 +402,7 @@ final class PassController: ObservableObject {
         // Pass som blev färdiga medan listan lästes ligger redan i `saved`.
         let nya: [Pass] = lista.filter { (p: Pass) -> Bool in !saved.contains { $0.id == p.id } }
         saved = Self.newestFirst(saved + nya)
+        // BESLUT B117. Pass med luckor fylls ur bandets historik när den finns.
+        fillFromHistory()
     }
 }

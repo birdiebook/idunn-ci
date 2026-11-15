@@ -63,6 +63,9 @@ struct PassActions {
 
 /// Formen på passets siffror: samma överallt, så att en tid alltid läses likadant.
 enum PassFormat {
+    /// BESLUT B117 · METOD M68. Raden i ett pass där bandet inte hörs, och i ett sparat pass med luckor.
+    static let väntarPåHistoriken = "Pulsen fylls i när bandet har lämnat sin historik"
+
     /// `hh:mm:ss`.
     static func clock(_ seconds: TimeInterval) -> String {
         let s = max(0, Int(seconds.rounded(.down)))
@@ -409,9 +412,16 @@ struct PassScreen: View {
     private func silentRow(_ p: Pass) -> some View {
         let sist = p.samples.last?.t ?? p.start
         if now.timeIntervalSince(sist) > Self.silentSeconds {
-            Label("Bandet hörs inte", systemImage: "antenna.radiowaves.left.and.right.slash")
-                .font(.subheadline)
-                .foregroundStyle(.orange)
+            VStack(spacing: 4) {
+                Label("Bandet hörs inte", systemImage: "antenna.radiowaves.left.and.right.slash")
+                    .font(.subheadline)
+                    .foregroundStyle(.orange)
+                // BESLUT B117. Bandet mäter vidare själv: passet fylls när telefonen fått dess historik.
+                Text(PassFormat.väntarPåHistoriken)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
     }
 }
@@ -540,6 +550,13 @@ struct PassDetail: View {
                 if PassKarta.harRutt(pass) { PassKarta(pass: pass, maxPulse: maxPulse) }
                 PassChart(pass: pass, now: pass.afterEnd ?? pass.stop ?? pass.start)
                     .frame(height: 220)
+                // BESLUT B117 · METOD M68. Passet har luckor och bandets historik för tiden har inte kommit än.
+                if PassHistory.awaitsHistory(pass, now: Date()) {
+                    Label(PassFormat.väntarPåHistoriken, systemImage: "clock.arrow.circlepath")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 PassStats(pass: pass)
                 if pass.stop != nil { PassRecovery(pass: pass) }
             }
