@@ -76,7 +76,8 @@ public enum PassDetection {
     }
 
     /// METOD M69. Passen i minuterna. `excluded` är tider som inte ska ge förslag (natten, pass som redan finns),
-    /// som slutna områden av Unix-minuter. Minuterna får komma i valfri ordning; en minut två gånger räknas en gång.
+    /// som slutna områden av Unix-minuter. Minuterna får komma i valfri ordning. Står samma minut två gånger
+    /// räknas den en gång, och är raderna olika gäller den som står sist i listan.
     public static func candidates(_ minutes: [Minute], restingPulse: Double, maxPulse: Double,
                                   excluded: [ClosedRange<Int>] = [], rules: Rules = Rules()) -> [Candidate] {
         guard maxPulse > restingPulse else { return [] }

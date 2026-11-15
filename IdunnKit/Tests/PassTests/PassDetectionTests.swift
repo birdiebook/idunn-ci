@@ -128,9 +128,17 @@ final class PassDetectionTests: XCTestCase {
     }
 
     func testOrdningenOchDubbletterSpelarIngenRoll() {
-        let m = dag(minuter(200, 40, puls: 150))
+        // En dag utan överlapp: vila, pass, vila. (`dag` lägger passet ovanpå vilan för samma minuter, och då
+        // avgör ordningen vilken rad som gäller.)
+        let m = minuter(0, 200, puls: 65, rörelse: 0.005) + minuter(200, 40, puls: 150)
+            + minuter(240, 360, puls: 65, rörelse: 0.005)
+        XCTAssertEqual(hitta(m).count, 1)
         XCTAssertEqual(hitta(m.reversed()), hitta(m))
         XCTAssertEqual(hitta(m + m), hitta(m))
+        // Två olika rader för samma minut: den som står sist i listan gäller.
+        let vila = minuter(200, 40, puls: 65, rörelse: 0.005)
+        XCTAssertEqual(hitta(m + vila), [])
+        XCTAssertEqual(hitta(vila + m).count, 1)
     }
 
     func testEgnaTrösklar() {
