@@ -7,43 +7,23 @@ import HeartRate
 /// är på. Det är Whoop-appens väg under ett träningspass, och den kräver varken
 /// Whoop-appen eller "Broadcast Heart Rate" (2A37).
 ///
-/// Paketet har samma posthuvud som historiken (PROTOKOLL_W5 §2.2): typ i i0,
-/// tid i i7. Pulsen läses i **i17** (u8, bpm) och RR-antalet i i18 med upp till
-/// fyra RR (u16, ms) från i19 — Whoop 4:s platser (NOOP), som också är pulsens
-/// plats i Whoop 5:s K24. **antagande** för typ 40 på Whoop 5 tills ett pass
-/// är jämfört; ramarna sparas råa i dygnsfilen som allt annat, så platsen går
-/// att rätta i efterhand.
+/// **Mätt på bandet (METOD M48, BESLUT B118):** paketet är 20 byte långt (inre del) och har inte historikens
+/// posthuvud. Pulsen ligger i **i8** (u8, bpm); talen bakom mätningen står i METOD M48. Den tidigare platsen i17
+/// (Whoop 4:s, antagen) bar aldrig en puls. Var RR ligger i paketet är inte känt: RR läses inte.
 public enum RealtimePulse {
     public static let packetType: UInt8 = 40
-    /// METOD M48. Pulsens plats (inre offset).
-    public static let bpmOffset = 17
-    /// METOD M48. RR-antalet och RR-värdenas början (Whoop 4).
-    public static let rrCountOffset = 18
-    public static let rrOffset = 19
-    public static let maxRR = 4
-    /// METOD M48. **antagande**: en puls utanför är inte en puls (fel plats eller ingen kontakt).
+    /// METOD M48. Pulsens plats (inre offset). **mätt**.
+    public static let bpmOffset = 8
+    /// METOD M48. **antagande**: en puls utanför är inte en puls (ingen kontakt).
     public static let bpmRange = 25...230
-    /// METOD M48. **antagande**: 250–2 500 ms motsvarar 24–240 slag per minut.
-    public static let rrRange = 250...2500
 
     /// Pulsen ur ett helt paket av typ 40, eller `nil` om paketet inte är det
-    /// eller pulsen inte är rimlig. RR tas bara med när antalet är 1–4 och
-    /// varje värde är rimligt; annars tom.
+    /// eller pulsen inte är rimlig. Utan RR (platsen är inte känd).
     public static func measurement(inner: [UInt8]) -> HeartRateMeasurement? {
         guard inner.count > bpmOffset, inner[0] == packetType else { return nil }
         let bpm = Int(inner[bpmOffset])
         guard bpmRange.contains(bpm) else { return nil }
-        var rr: [Double] = []
-        if inner.count > rrCountOffset {
-            let n = Int(inner[rrCountOffset])
-            if (1...maxRR).contains(n), inner.count >= rrOffset + 2 * n {
-                let värden = (0..<n).map { k in
-                    Int(inner[rrOffset + 2 * k]) | (Int(inner[rrOffset + 2 * k + 1]) << 8)
-                }
-                if värden.allSatisfy({ rrRange.contains($0) }) { rr = värden.map(Double.init) }
-            }
-        }
-        return HeartRateMeasurement(bpm: bpm, rrMilliseconds: rr)
+        return HeartRateMeasurement(bpm: bpm)
     }
 }
 

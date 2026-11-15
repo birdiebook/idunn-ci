@@ -10,18 +10,14 @@ import HeartRate
 final class PulseControlTests: XCTestCase {
     let t0 = Date(timeIntervalSince1970: 1_760_000_000)
 
-    /// Ett påhittat REALTIME_DATA-paket (typ 40): posthuvud, puls i i17, RR-antal i i18, RR från i19.
-    static func typ40(bpm: UInt8, rr: [UInt16] = [], längd: Int = 48) -> [UInt8] {
+    /// Ett påhittat REALTIME_DATA-paket (typ 40) i den mätta formen (METOD M48): 20 byte, pulsen i i8.
+    /// `gammalPlats` lägger ett tal i i17, där Whoop 4 har pulsen: det får aldrig läsas.
+    static func typ40(bpm: UInt8, längd: Int = 20, gammalPlats: UInt8 = 0) -> [UInt8] {
         var b = [UInt8](repeating: 0, count: längd)
         b[0] = 40
-        b[1] = 24
-        for (i, v) in Ramar.u32(Ramar.t0).enumerated() { b[7 + i] = v }
-        b[17] = bpm
-        b[18] = UInt8(rr.count)
-        for (k, v) in rr.enumerated() {
-            b[19 + 2 * k] = UInt8(v & 0xFF)
-            b[20 + 2 * k] = UInt8(v >> 8)
-        }
+        b[1] = 7
+        b[8] = bpm
+        if längd > 17 { b[17] = gammalPlats }
         return b
     }
 
@@ -64,11 +60,14 @@ final class PulseControlTests: XCTestCase {
 
     // MARK: Paketet
 
-    func testPulsenLäsesUrI17OchRRUrI18() {
-        let m = RealtimePulse.measurement(inner: Self.typ40(bpm: 72, rr: [833, 845]))
+    func testPulsenLäsesUrI8() {
+        let m = RealtimePulse.measurement(inner: Self.typ40(bpm: 72, gammalPlats: 150))
         XCTAssertEqual(m?.bpm, 72)
-        XCTAssertEqual(m?.rrMilliseconds, [833, 845])
+        XCTAssertEqual(m?.rrMilliseconds, [])
         XCTAssertNil(m?.sensorContact)
+        // Platsen från Whoop 4 (i17) läses inte: ett paket med en rimlig puls bara där ger ingen puls.
+        XCTAssertNil(RealtimePulse.measurement(inner: Self.typ40(bpm: 0, gammalPlats: 72)))
+        XCTAssertEqual(RealtimePulse.bpmOffset, 8)
     }
 
     func testOrimligPulsEllerFelTypGerIngenPuls() {
@@ -80,19 +79,27 @@ final class PulseControlTests: XCTestCase {
         var fel = Self.typ40(bpm: 70)
         fel[0] = 47
         XCTAssertNil(RealtimePulse.measurement(inner: fel))
-        XCTAssertNil(RealtimePulse.measurement(inner: Array(Self.typ40(bpm: 70).prefix(17))))
+        // För kort för att bära pulsen, och precis långt nog.
+        XCTAssertNil(RealtimePulse.measurement(inner: Array(Self.typ40(bpm: 70).prefix(8))))
+        XCTAssertEqual(RealtimePulse.measurement(inner: Array(Self.typ40(bpm: 70).prefix(9)))?.bpm, 70)
     }
 
-    func testOrimligaRRSläppsMenPulsenBehålls() {
-        XCTAssertEqual(RealtimePulse.measurement(inner: Self.typ40(bpm: 70, rr: [900, 100]))?.rrMilliseconds, [])
-        var fem = Self.typ40(bpm: 70)
-        fem[18] = 5
-        XCTAssertEqual(RealtimePulse.measurement(inner: fem)?.rrMilliseconds, [])
-        // Antalet pekar förbi paketets slut.
-        var kort = Array(Self.typ40(bpm: 70, rr: [900, 900]).prefix(21))
-        kort[18] = 2
-        XCTAssertEqual(RealtimePulse.measurement(inner: kort)?.bpm, 70)
-        XCTAssertEqual(RealtimePulse.measurement(inner: kort)?.rrMilliseconds, [])
+    func testDenMättaFormenGerEttProvPerPaket() {
+        // Formen som mättes: tre start med svaret 1, paket på 20 byte en gång i sekunden. Med pulsen i i8 blir
+        // varje paket ett prov, och `puls-ingen` skrivs aldrig (förut: inget prov och `puls-ingen` efter 30 s).
+        var c = PulseControl(now: t0)
+        var märkt: [String] = märken(c.start(now: t0)) + märken(c.tick(now: t0, canWrite: true))
+        märkt += märken(c.receive(frame(Self.svar(3, sekvens: 201, resultat: 1), t: t0 + 1), now: t0 + 1))
+        var prov = 0
+        for s in 2...120 {
+            let nu = t0 + Double(s)
+            let a = c.receive(frame(Self.typ40(bpm: UInt8(90 + s % 30)), t: nu), now: nu)
+            prov += pulser(a).count
+            märkt += märken(a) + märken(c.tick(now: nu + 0.5, canWrite: true))
+        }
+        XCTAssertEqual(prov, 119)
+        XCTAssertEqual(c.progress.starts, 1)
+        XCTAssertEqual(märkt, ["puls-start", "puls-skrev på 201", "puls-svar 1", "puls-ram 20", "puls-första"])
     }
 
     // MARK: Maskinen
@@ -286,7 +293,7 @@ final class PulseControlTests: XCTestCase {
         XCTAssertEqual(märken(c.tick(now: t0, canWrite: true)), ["puls-skrev på 201"])
         // Första paketet: längden. Första paketet utan rimlig puls: ett märke till. Båda bara en gång.
         XCTAssertEqual(märken(c.receive(frame(Self.typ40(bpm: 0), t: t0 + 1), now: t0 + 1)),
-                       ["puls-ram 48", "puls-orimlig"])
+                       ["puls-ram 20", "puls-orimlig"])
         XCTAssertEqual(märken(c.receive(frame(Self.typ40(bpm: 0, längd: 60), t: t0 + 2), now: t0 + 2)), [])
         XCTAssertEqual(märken(c.receive(frame(Self.typ40(bpm: 70), t: t0 + 3), now: t0 + 3)), ["puls-första"])
         XCTAssertEqual(märken(c.receive(frame(Self.typ40(bpm: 71), t: t0 + 4), now: t0 + 4)), [])
@@ -298,22 +305,22 @@ final class PulseControlTests: XCTestCase {
         _ = c.start(now: t0 + 100)
         _ = c.tick(now: t0 + 100, canWrite: true)
         XCTAssertEqual(märken(c.receive(frame(Self.typ40(bpm: 70), t: t0 + 101), now: t0 + 101)),
-                       ["puls-ram 48", "puls-första"])
+                       ["puls-ram 20", "puls-första"])
     }
 
     func testIngetMärkeBärEttMätvärde() {
-        // Pulsen 173 och RR 1234 får aldrig stå i ett märke: bara antal, längder, koder och sekvenser.
+        // Pulsen 173 och talet 123 på den gamla platsen får aldrig stå i ett märke: bara antal, längder, koder och sekvenser.
         var c = PulseControl(now: t0)
         var alla: [String] = märken(c.start(now: t0)) + märken(c.tick(now: t0, canWrite: true))
         alla += märken(c.receive(frame(Self.svar(3, sekvens: 201, resultat: 1), t: t0), now: t0))
         for s in 1...20 {
-            alla += märken(c.receive(frame(Self.typ40(bpm: 173, rr: [1234]), t: t0 + Double(s)), now: t0 + Double(s)))
+            alla += märken(c.receive(frame(Self.typ40(bpm: 173, gammalPlats: 123), t: t0 + Double(s)), now: t0 + Double(s)))
         }
         alla += märken(c.stop(now: t0 + 21, reason: .done)) + märken(c.tick(now: t0 + 21, canWrite: true))
-        XCTAssertEqual(alla, ["puls-start", "puls-skrev på 201", "puls-svar 1", "puls-ram 48", "puls-första",
+        XCTAssertEqual(alla, ["puls-start", "puls-skrev på 201", "puls-svar 1", "puls-ram 20", "puls-första",
                               "puls-stopp klar", "puls-slut r20 p20 t0", "puls-skrev av 202"])
         for m in alla {
-            XCTAssertFalse(m.contains("173") || m.contains("1234"), m)
+            XCTAssertFalse(m.contains("173") || m.contains("123"), m)
             XCTAssertLessThanOrEqual(m.count, 32, m)   // RecordingLog.marker kortar vid 32 tecken
         }
     }
