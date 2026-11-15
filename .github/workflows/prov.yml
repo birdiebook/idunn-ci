@@ -1,0 +1,133 @@
+# SPEGELNS CI (BESLUT B119). Den här filen ligger i det privata repot som spegel/workflows/prov.yml och läggs av
+# tools/spegla.py på .github/workflows/prov.yml i den publika spegeln. Kör provet (schemat IdunnProv) i en
+# iOS-simulator, som ios-prov i codemagic.yaml, och lägger bilderna på spegelns gren prov-bilder under
+# bilder/<privat-hash>/ och utfallet som resultat/<privat-hash>-prov.txt på ci-resultat (hashen står i filen
+# PRIVAT_COMMIT). Hämtas med: python tools/spegla.py --bilder
+#
+# Bilderna bär bara påhittad data (DemoData och provens egna värden). Grenen prov-bilder skrivs över vid varje
+# körning och bär bara den senaste körningens bilder, så att spegeln inte växer.
+#
+# Körs när App/ eller Prov/ ändrats sedan förra speglingen, eller för hand.
+name: prov
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: prov
+  cancel-in-progress: true
+
+jobs:
+  prov:
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Har App/ eller Prov/ ändrats?
+        id: andrat
+        shell: bash
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] || ! git rev-parse -q --verify HEAD~1 >/dev/null; then
+            echo "kor=ja" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet HEAD~1 HEAD -- App Prov; then
+            echo "kor=nej" >> "$GITHUB_OUTPUT"
+            echo "Varken App/ eller Prov/ har ändrats: inget prov."
+          else
+            echo "kor=ja" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Projektet (XcodeGen)
+        if: steps.andrat.outputs.kor == 'ja'
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Rita vyerna i simulatorn
+        if: steps.andrat.outputs.kor == 'ja'
+        # Samma schema, språk, konfiguration och flaggor som ios-prov i codemagic.yaml.
+        shell: bash
+        run: |
+          mkdir -p /tmp/idun_prov
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          bast = None
+          for rt, enheter in json.load(sys.stdin)["devices"].items():
+              if "iOS" not in rt:
+                  continue
+              ver = tuple(int(x) for x in rt.rsplit("iOS-", 1)[-1].split("-") if x.isdigit())
+              for e in enheter:
+                  n = e["name"]
+                  if not n.startswith("iPhone"):
+                      continue
+                  poang = (n == "iPhone 17 Pro", ver, "Pro" in n and "Max" not in n)
+                  if bast is None or poang > bast[0]:
+                      bast = (poang, e["udid"], n, rt)
+          if bast is None:
+              sys.exit("ingen iPhone-simulator finns")
+          print(f"Simulator: {bast[2]} ({bast[3]})", file=sys.stderr)
+          print(bast[1])
+          ')
+          set +e
+          xcodebuild test \
+            -project Idunn.xcodeproj \
+            -scheme IdunnProv \
+            -destination "id=$UDID" \
+            -testLanguage sv \
+            -testRegion SE \
+            -configuration Release \
+            ENABLE_TESTABILITY=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            > /tmp/prov.log 2>&1
+          echo $? > /tmp/kod.txt
+          set -e
+          tail -5 /tmp/prov.log
+          echo "kod $(cat /tmp/kod.txt), $(ls /tmp/idun_prov/*.png 2>/dev/null | wc -l) bilder"
+      - name: Lägg bilderna på prov-bilder och utfallet på ci-resultat
+        if: always() && steps.andrat.outputs.kor == 'ja'
+        shell: bash
+        run: |
+          set -euo pipefail
+          kod=$(cat /tmp/kod.txt 2>/dev/null || echo 1)
+          PRIVAT=$(tr -d '[:space:]' < "${GITHUB_WORKSPACE}/PRIVAT_COMMIT")
+          antal=$(ls /tmp/idun_prov/*.png 2>/dev/null | wc -l | tr -d ' ')
+          URL="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          # Bilderna: en gren utan historik, bara den här körningen.
+          if [ "$antal" != "0" ]; then
+            rm -rf /tmp/b && mkdir -p "/tmp/b/bilder/${PRIVAT}" && cd /tmp/b && git init -q
+            cp /tmp/idun_prov/*.png "bilder/${PRIVAT}/"
+            git checkout -q --orphan prov-bilder
+            git add -A && git -c user.name=idunn-ci -c user.email=idunn-ci@users.noreply.github.com commit -qm "prov ${PRIVAT}"
+            git push -q --force "$URL" prov-bilder
+          fi
+          {
+            echo "${PRIVAT} spegel $(date -u +%FT%TZ) run ${GITHUB_RUN_ID}"
+            echo "== prov (xcodebuild test, IdunnProv, simulator)"
+            if [ "$kod" = "0" ] && [ "$antal" != "0" ]; then
+              echo "GRÖNT: provet gick, ${antal} bilder"
+            else
+              echo "RÖTT: provet föll (kod $kod), ${antal} bilder"
+              # Felraderna en gång var. Provets data är påhittad, så raderna bär inga riktiga värden.
+              grep -E "error:|: error|failed|XCTAssert" /tmp/prov.log 2>/dev/null | sed "s#${GITHUB_WORKSPACE}/##" | sort -u | head -80 || true
+              tail -20 /tmp/prov.log 2>/dev/null || true
+            fi
+            grep -E "PROV: " /tmp/prov.log 2>/dev/null | sed -E 's/^.*(PROV: )/\1/' | sort -u | head -60 || true
+            ls /tmp/idun_prov 2>/dev/null | sed 's/^/bild: /' || true
+          } > /tmp/resultat.txt
+          cat /tmp/resultat.txt | head -40
+          for i in 1 2 3 4 5; do
+            rm -rf /tmp/r && mkdir /tmp/r && cd /tmp/r && git init -q
+            git remote add origin "$URL"
+            if git fetch -q origin ci-resultat 2>/dev/null; then git checkout -q -b ci-resultat FETCH_HEAD; else git checkout -q --orphan ci-resultat; fi
+            mkdir -p resultat && cp /tmp/resultat.txt "resultat/${PRIVAT}-prov.txt"
+            git add -A && git -c user.name=idunn-ci -c user.email=idunn-ci@users.noreply.github.com commit -qm "prov ${PRIVAT}"
+            git push -q origin ci-resultat && break
+            sleep $((i * 3))
+          done
+      - name: Fäll jobbet om provet föll
+        if: steps.andrat.outputs.kor == 'ja'
+        shell: bash
+        run: exit "$(cat /tmp/kod.txt)"
