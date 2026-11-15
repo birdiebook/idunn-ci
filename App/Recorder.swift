@@ -194,6 +194,11 @@ final class Recorder: NSObject, ObservableObject {
     private var pulseTimer: Timer?
     private var pulseArmedSaved = false
     private var lastRealtimePulseAt = Date.distantPast
+    // BESLUT B116 · METOD M67. Reserven 2A37 i antal (notiser, och de som gick till passet), och märkena
+    // om passets puls som skrivs en gång per pass. Bara under ett pass; inga mätvärden.
+    private var reservePulses = 0
+    private var reservePulsesUsed = 0
+    private var pulseNotes: Set<String> = []
     private static let realtimeHoldoff: TimeInterval = 5
     /// Vem som skrev senast, så att ett skrivfel går till rätt maskin.
     private enum Writer { case fetch, imu, pulse }
@@ -864,8 +869,15 @@ extension Recorder {
     /// nästa anslutning (`didConnect`). Den passiva lyssningen, hämtningen och IMU-provet rörs inte.
     func startPulse() {
         pulseWanted = true
+        reservePulses = 0
+        reservePulsesUsed = 0
+        pulseNotes = []
         // BESLUT B61 · METOD M48. Bandets realtidspuls (kommando 3); 2A37 nedan är reserven.
         runPulse(pulse.start(now: Date()))
+        // BESLUT B116. Läget vid Start: bandet anslutet (a), skrivkarakteristiken känd (k), en hämtning pågår (h).
+        let ansluten: Int = band?.state == .connected ? 1 : 0
+        let kanal: Int = commandCharacteristic == nil ? 0 : 1
+        pulseNote("puls-läge a\(ansluten) k\(kanal) h\(fetching ? 1 : 0)")
         if let b = band, b.state == .connected, let c = central, c.state == .poweredOn {
             if let ch = pulseCharacteristic, ch.properties.contains(.notify) {
                 b.setNotifyValue(true, for: ch)
@@ -880,6 +892,8 @@ extension Recorder {
     /// BESLUT B58. Passet är slut: slå av notisen. Bandet och lyssnaren ligger kvar.
     func stopPulse() {
         runPulse(pulse.stop(now: Date(), reason: .done))
+        // BESLUT B116. Reserven i antal: 2A37-notiser under passet (n), och de som gick till passet (k).
+        pulseNote("puls-2a37 n\(reservePulses) k\(reservePulsesUsed)")
         pulseWanted = false
         if let b = band, b.state == .connected, let ch = pulseCharacteristic, ch.isNotifying {
             b.setNotifyValue(false, for: ch)
@@ -890,6 +904,15 @@ extension Recorder {
 // MARK: - Passets realtidspuls
 
 extension Recorder {
+    /// BESLUT B116 · METOD M67. Ett märke om passets puls i dygnets sidofil, högst en gång per pass och bara medan
+    /// ett pass vill ha pulsen. Ordet säger var på vägen något hände; aldrig ett mätvärde.
+    private func pulseNote(_ label: String) {
+        guard pulseWanted, pulseNotes.insert(label).inserted else { return }
+        let now = Date()
+        ensureDay(at: now)
+        sideFile?.append(RecordingLog.marker(label, at: now))
+    }
+
     /// BESLUT B61 · METOD M48. Klockan för realtidspulsen: start, nya försök och stoppet.
     private func tickPulse() {
         let kanSkriva = band?.state == .connected && commandCharacteristic != nil && !fetching
@@ -1039,6 +1062,10 @@ extension Recorder: CBPeripheralDelegate {
             default: break
             }
         }
+        // BESLUT B116. Reserven: bandet visar ingen pulstjänst (bara under ett pass).
+        if pulseWanted, !(p.services ?? []).contains(where: { $0.uuid == Self.heartRateService }) {
+            pulseNote("puls-2a37 tjänst saknas")
+        }
     }
 
     /// BESLUT B14: här prenumereras och läses det. `setNotifyValue` slår bara
@@ -1059,6 +1086,8 @@ extension Recorder: CBPeripheralDelegate {
                 // BESLUT B58 · METOD M47. Pulsen under ett pass.
                 pulseCharacteristic = ch
                 if pulseWanted, ch.properties.contains(.notify) { p.setNotifyValue(true, for: ch) }
+                // BESLUT B116. Reserven: karakteristiken finns men ger inga notiser.
+                if !ch.properties.contains(.notify) { pulseNote("puls-2a37 utan notis") }
             } else if Self.whoopListened.contains(ch.uuid),
                       ch.properties.contains(.notify) || ch.properties.contains(.indicate) {
                 notifyRequested.insert(RawFrame.shortName(ch.uuid.uuidString))
@@ -1069,6 +1098,15 @@ extension Recorder: CBPeripheralDelegate {
     }
 
     func peripheral(_ p: CBPeripheral, didUpdateNotificationStateFor ch: CBCharacteristic, error: Error?) {
+        if ch.uuid == Self.heartRateMeasurement {
+            // BESLUT B116. Reserven under ett pass: prenumerationen gick på, eller felets kod. Inget annat ändras.
+            if let e = error {
+                pulseNote("puls-2a37 fel \((e as NSError).code)")
+            } else if ch.isNotifying {
+                pulseNote("puls-2a37 på")
+            }
+            return
+        }
         guard Self.whoopListened.contains(ch.uuid) else { return }
         let namn = RawFrame.shortName(ch.uuid.uuidString)
         if error == nil && ch.isNotifying { listening.insert(namn) } else { listening.remove(namn) }
@@ -1106,7 +1144,12 @@ extension Recorder: CBPeripheralDelegate {
             // BESLUT B58. Pulsen går till passet, inte till dygnsfilen. BESLUT B61: bara som reserv,
             // när bandets realtidspuls inte kommit på en stund (annars blir varje sekund två prov).
             let nu = Date()
-            if nu.timeIntervalSince(lastRealtimePulseAt) >= Self.realtimeHoldoff { onPulse?(m, nu) }
+            reservePulses += 1
+            pulseNote("puls-2a37 första")
+            if nu.timeIntervalSince(lastRealtimePulseAt) >= Self.realtimeHoldoff {
+                reservePulsesUsed += 1
+                onPulse?(m, nu)
+            }
         }
     }
 }

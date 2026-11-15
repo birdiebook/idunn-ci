@@ -55,7 +55,10 @@ public enum RealtimePulse {
 /// - **Start:** TOGGLE_REALTIME_HR (3) `01`. Kommer ingen puls inom
 ///   `resendAfter` skickas startet igen, högst `maxStartsWithoutPulse` gånger i
 ///   rad; en puls nollställer räkningen. Samma regel tar upp strömmen när den
-///   tystnat mitt i passet (till exempel efter en återanslutning).
+///   tystnat mitt i passet (till exempel efter en återanslutning). Efter de
+///   tre försöken skickas startet glesare (`slowRetryAfter`) så länge passet
+///   går, om bandet inte sagt nej (BESLUT B116): ett band som var borta eller
+///   upptaget vid Start får en ny chans senare i passet.
 /// - **Stopp:** 3 `00`, gjort om högst `maxStopAttempts` gånger om skrivningen
 ///   misslyckas. Appen stoppar vid passets slut, när den avslutas
 ///   (`flushStop`) och, om den dog under ett pass, vid nästa start
@@ -64,6 +67,14 @@ public enum RealtimePulse {
 /// - **Inget skydd mot andras ström:** startar Whoop-appen sin egen
 ///   realtidspuls (ett pass där) lämnas den i fred. Typ 40 utan pass blir
 ///   ingen puls.
+///
+/// - **Märkena (BESLUT B116, METOD M67):** varje steg på vägen lämnar ett märke
+///   i sidofilen, så att ett pass utan puls går att förklara ur en export utan
+///   att någon läser mätvärden: `puls-skrev på|av <sekvens>`, `puls-skrivfel
+///   på|av`, `puls-svar <r>`, `puls-svar saknas`, `puls-ram <inre längd>` (första
+///   paketet av typ 40), `puls-ram trasig`, `puls-orimlig` (första paketet utan
+///   rimlig puls på platsen), `puls-första`, `puls-ingen` och vid stoppet
+///   `puls-slut r<ramar> p<pulser> t<trasiga>`. Bara antal, längder och koder.
 ///
 /// Maskinen räknar ramar och svar; pulsen går bara till passet (`.pulse`).
 public struct PulseControl: Sendable {
@@ -76,6 +87,9 @@ public struct PulseControl: Sendable {
         /// **antagande**. Så många start i rad utan puls innan maskinen slutar
         /// försöka (passet kan ändå få puls från 2A37, BESLUT B58).
         public var maxStartsWithoutPulse = 3
+        /// METOD M67 · BESLUT B116. **antagande**. Efter de försöken: ett start så här glest
+        /// så länge passet går och bandet inte sagt nej.
+        public var slowRetryAfter: TimeInterval = 60
         /// **antagande**. Ett svar som inte kommit så här länge räknas som uteblivet.
         public var commandTimeout: TimeInterval = 10
         /// **antagande**. Ny skrivning efter en misslyckad.
@@ -143,6 +157,10 @@ public struct PulseControl: Sendable {
     private var awaiting: [(command: WhoopCommand, sentAt: Date)] = []
     private var nextSequence: UInt8
     private var gaveUpMarked = false
+    /// Bandet svarade annat än 1 på startet: inga fler försök i det här passet.
+    private var refused = false
+    /// BESLUT B116. Märken som skrivs en gång per pass.
+    private var marked: Set<String> = []
 
     /// `stopAtStart`: appen dog under ett pass (sparat i appen). Stoppet läggs
     /// i kön direkt och skrivs när bandet går att skriva till.
@@ -174,6 +192,8 @@ public struct PulseControl: Sendable {
         phase = .on
         startsWithoutPulse = 0
         gaveUpMarked = false
+        refused = false
+        marked = []
         lastStartAt = nil
         queue = [.on]
         nextWriteAt = max(nextWriteAt, now)
@@ -184,26 +204,32 @@ public struct PulseControl: Sendable {
     public mutating func stop(now: Date, reason: StopReason) -> [Action] {
         if case .stopping = phase { return [] }
         if phase == .off && reason != .restart { return [] }
+        var ut: [Action] = [.mark("puls-stopp " + reason.rawValue)]
+        // BESLUT B116. Vad passet fick, i antal: ramar av typ 40, av dem med rimlig puls, och trasiga.
+        if phase == .on { ut.append(.mark(summaryMark)) }
         phase = .stopping(reason)
         stopAttempts = 0
         queue = [.off]
         nextWriteAt = max(nextWriteAt, now)
-        return [.mark("puls-stopp " + reason.rawValue)]
+        return ut
     }
 
     /// Klockan, gärna fyra gånger i sekunden medan `isArmed`. `canWrite`: bandet
     /// är anslutet, skrivkarakteristiken funnen och ingen hämtning pågår.
     public mutating func tick(now: Date, canWrite: Bool) -> [Action] {
-        var ut: [Action] = []
-        expireResponses(now: now)
+        var ut: [Action] = expireResponses(now: now)
         if phase == .on, queue.isEmpty, canWrite, let s = lastStartAt {
             let senast = max(s, progress.lastPulseAt ?? .distantPast)
             if now.timeIntervalSince(senast) >= config.resendAfter {
                 if startsWithoutPulse < config.maxStartsWithoutPulse {
                     queue = [.on]
-                } else if !gaveUpMarked {
-                    gaveUpMarked = true
-                    ut.append(.mark("puls-ingen"))
+                } else {
+                    if !gaveUpMarked {
+                        gaveUpMarked = true
+                        ut.append(.mark("puls-ingen"))
+                    }
+                    // BESLUT B116. Glesa försök så länge passet går, om bandet inte sagt nej.
+                    if !refused, now.timeIntervalSince(senast) >= config.slowRetryAfter { queue = [.on] }
                 }
             }
         }
@@ -221,6 +247,8 @@ public struct PulseControl: Sendable {
         case .off:
             stopAttempts += 1
         }
+        // BESLUT B116. Märket före skrivningen: appen avbryter åtgärderna om skrivningen inte går.
+        ut.append(.mark(writeMark(c)))
         ut.append(.write(c))
         if queue.isEmpty, case .stopping = phase { finishStop(now: now) }
         return ut
@@ -232,37 +260,41 @@ public struct PulseControl: Sendable {
         guard f.inner.first == RealtimePulse.packetType, phase == .on else { return [] }
         guard f.crc32OK else {
             progress.corruptFrames += 1
-            return []
+            return once("puls-ram trasig")
         }
         progress.frames += 1
-        guard let m = RealtimePulse.measurement(inner: f.inner) else { return [] }
+        var ut: [Action] = once("puls-ram", label: "puls-ram \(f.inner.count)")
+        guard let m = RealtimePulse.measurement(inner: f.inner) else { return ut + once("puls-orimlig") }
         progress.pulses += 1
         progress.lastPulseAt = now
         startsWithoutPulse = 0
         gaveUpMarked = false
-        return [.pulse(m)]
+        ut += once("puls-första")
+        ut.append(.pulse(m))
+        return ut
     }
 
     /// Den senaste skrivningen gick inte fram. Ett start görs om vid nästa
     /// `resendAfter` (räknas som ett start); ett stopp görs om, högst
     /// `maxStopAttempts` gånger.
     public mutating func writeFailed(now: Date) -> [Action] {
-        guard lastStep == .off else { return [] }
+        guard lastStep == .off else { return [.mark("puls-skrivfel på")] }
+        let ut: [Action] = [.mark("puls-skrivfel av")]
         let reason: StopReason
         switch phase {
         case .stopping(let r): reason = r
         case .off: reason = .done
-        case .on: return []
+        case .on: return ut
         }
         guard stopAttempts < config.maxStopAttempts else {
             queue = []
             finishStop(now: now)
-            return []
+            return ut
         }
         phase = .stopping(reason)
         queue = [.off]
         nextWriteAt = now.addingTimeInterval(config.retryDelay)
-        return []
+        return ut
     }
 
     /// Appen avslutas: stoppet på en gång, utan mellanrum. Bara om passet vill ha puls.
@@ -274,6 +306,7 @@ public struct PulseControl: Sendable {
             let c = command(for: step)
             awaiting.append((c, now))
             lastStep = step
+            ut.append(.mark(writeMark(c)))
             ut.append(.write(c))
         }
         queue = []
@@ -305,14 +338,40 @@ public struct PulseControl: Sendable {
         guard c.payload == [0x01] else { return [] }
         progress.startResults.append(r.result)
         // Bandet sade nej: inga fler försök (passet kan ändå få 2A37).
-        if r.result != 1 { startsWithoutPulse = config.maxStartsWithoutPulse }
+        if r.result != 1 {
+            startsWithoutPulse = config.maxStartsWithoutPulse
+            refused = true
+        }
         return [.mark("puls-svar \(r.result)")]
     }
 
-    private mutating func expireResponses(now: Date) {
+    /// BESLUT B116. Ett start som bandet inte svarat på i tid lämnar märket `puls-svar saknas`.
+    private mutating func expireResponses(now: Date) -> [Action] {
+        var ut: [Action] = []
         while let first = awaiting.first, now.timeIntervalSince(first.sentAt) > config.commandTimeout {
             awaiting.removeFirst()
-            if first.command.payload == [0x01] { progress.startResults.append(nil) }
+            if first.command.payload == [0x01] {
+                progress.startResults.append(nil)
+                ut.append(.mark("puls-svar saknas"))
+            }
         }
+        return ut
+    }
+
+    // MARK: Märkena (BESLUT B116, METOD M67)
+
+    /// `puls-skrev på 201`: vilket kommando som lämnades till skrivningen, och dess sekvens.
+    private func writeMark(_ c: WhoopCommand) -> String {
+        "puls-skrev " + (c.payload == [0x01] ? "på" : "av") + " \(c.sequence)"
+    }
+
+    /// `puls-slut r<ramar> p<pulser> t<trasiga>`: bara antal.
+    private var summaryMark: String {
+        "puls-slut r\(progress.frames) p\(progress.pulses) t\(progress.corruptFrames)"
+    }
+
+    /// Ett märke högst en gång per pass.
+    private mutating func once(_ key: String, label: String? = nil) -> [Action] {
+        marked.insert(key).inserted ? [.mark(label ?? key)] : []
     }
 }
