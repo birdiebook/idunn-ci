@@ -284,6 +284,11 @@ final class IdunnProv: XCTestCase {
             MorningCardScreen(days: dagar, summaries: nätter, alert: tyst, bundles: d.bundles, loadsCurves: false,
                               band: .okänd)
         }, namn: "skarm-morgon-fel", höjd: 1_500)
+        // BESLUT B123. Lågt batteri: ansluten med 14 %, och brickan med batteriet i rött.
+        try fånga(NavigationStack {
+            MorningCardScreen(days: dagar, summaries: nätter, bundles: d.bundles, loadsCurves: false,
+                              band: Bandstatus(batteri: 14, ansluten: true))
+        }, namn: "skarm-morgon-batteri-lagt", höjd: 1_500)
         try fånga(NavigationStack {
             MorningCardScreen(days: ung, summaries: nätter, bundles: d.bundles, loadsCurves: false,
                               band: Bandstatus(batteri: 15, ansluten: false))

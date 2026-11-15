@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import Band
 import Fitness
 import Night
 import Sound
@@ -490,7 +491,13 @@ struct BatteryBadge: View {
     var body: some View {
         Label(percent.map { "\($0) %" } ?? "–", systemImage: Self.symbol(percent))
             .monospacedDigit()
-            .foregroundStyle(.secondary)
+            .foregroundStyle(lågt ? Tema.red : Color.secondary)
+    }
+
+    /// BESLUT B123. Rött under 20 %.
+    private var lågt: Bool {
+        guard let p = percent else { return false }
+        return BandBattery.isLow(p)
     }
 
     static func symbol(_ p: Int?) -> String {

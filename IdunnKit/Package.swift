@@ -17,6 +17,7 @@ let package = Package(
         .library(name: "SleepNeed", targets: ["SleepNeed"]),
         .library(name: "Fitness", targets: ["Fitness"]),
         .library(name: "Markers", targets: ["Markers"]),
+        .library(name: "Band", targets: ["Band"]),
         .library(name: "DemoData", targets: ["DemoData"]),
     ],
     targets: [
@@ -75,5 +76,9 @@ let package = Package(
         // nätternas och passens värden kommer in som dag och tal. Vyn och filen ligger i appen (Å2).
         .target(name: "Markers"),
         .testTarget(name: "MarkersTests", dependencies: ["Markers"]),
+        // Bandets batteri (BESLUT B123, METOD M70): när det är lågt (rött under 20 %) och när telefonen påminner om att
+        // ladda (vid 20, 10 och 5 %, en gång per gräns och urladdning). Bara Foundation och inga andra mål.
+        .target(name: "Band"),
+        .testTarget(name: "BandTests", dependencies: ["Band"]),
     ]
 )

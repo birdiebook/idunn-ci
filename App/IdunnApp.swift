@@ -8,7 +8,8 @@ struct IdunnApp: App {
     init() {
         // Inspelningen skapas vid start, före första vyn: när iOS väcker appen i
         // bakgrunden för bandet (state restoration) måste centralen finnas direkt.
-        _ = Recorder.shared
+        // BESLUT B123. Påminnelsen om att ladda bandet lyssnar på batteriet från start, också i bakgrunden.
+        Batteripåminnelse.shared.starta(recorder: Recorder.shared)
     }
 
     var body: some Scene {

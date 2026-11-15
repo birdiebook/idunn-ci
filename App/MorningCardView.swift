@@ -1,4 +1,5 @@
 import SwiftUI
+import Band
 import Night
 import Sound
 import WhoopFrames
@@ -116,6 +117,12 @@ struct BandstatusVy: View {
         return "battery.0percent"
     }
 
+    /// BESLUT B123. Rött under 20 %.
+    private var lågt: Bool {
+        guard let b = status.batteri else { return false }
+        return BandBattery.isLow(b)
+    }
+
     var body: some View {
         HStack(spacing: 5) {
             Circle()
@@ -123,11 +130,11 @@ struct BandstatusVy: View {
                 .frame(width: 7, height: 7)
             Image(systemName: symbol)
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(status.batteri == nil ? Tema.faint : Tema.text)
+                .foregroundStyle(status.batteri == nil ? Tema.faint : (lågt ? Tema.red : Tema.text))
             if let b = status.batteri {
                 Text("\(b)%")
                     .font(Tema.mono(12))
-                    .foregroundStyle(Tema.text)
+                    .foregroundStyle(lågt ? Tema.red : Tema.text)
             }
         }
         .accessibilityElement(children: .ignore)

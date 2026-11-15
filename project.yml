@@ -39,6 +39,9 @@ targets:
       # BESLUT B104 och B105. Profilen: markörerna, det inskrivna och normtabellerna.
       - package: IdunnKit
         product: Markers
+      # BESLUT B123. Bandets batteri: rött under 20 % och påminnelsen om att ladda.
+      - package: IdunnKit
+        product: Band
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: se.birdiebook.idun
@@ -112,6 +115,9 @@ targets:
         product: Pass
       - package: IdunnKit
         product: Markers
+      # BESLUT B123. Bandets batteri: rött under 20 % och påminnelsen om att ladda.
+      - package: IdunnKit
+        product: Band
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: se.birdiebook.idun.prov
