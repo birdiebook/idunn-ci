@@ -1,0 +1,75 @@
+# SPEGELNS CI (BESLUT B115). Den här filen ligger i det privata repot som spegel/workflows/test.yml och läggs av
+# tools/spegla.py på .github/workflows/test.yml i den publika spegeln. Resultatet namnges efter det privata commitet
+# (filen PRIVAT_COMMIT): resultat/<privat-hash>.txt på spegelns gren ci-resultat.
+name: tester
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  swift-test:
+    # Release med -enable-testing (så att @testable fungerar): testerna räknar hela påhittade nätter. Mätt
+    # 2026-10-15 på samma kod: debug 77 s bygge + 395 s tester, release 164 s + 44 s.
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    strategy:
+      matrix:
+        conf: [release]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntaxkontroll av App/ och Prov/ (swiftc -parse)
+        # Ingen kompilator ser App/ och Prov/ före provet i Codemagic (SwiftUI finns inte på Linux), men en parser
+        # hittar saknade klamrar och skrivfel. Typerna prövas bara av provet. Loggen delas med testerna, så att ett
+        # parsfel syns som RÖTT med sina error-rader i ci-resultat.
+        shell: bash
+        run: |
+          set -o pipefail
+          swiftc -parse -swift-version 5 App/*.swift Prov/*.swift 2>&1 | tee swift-${{ matrix.conf }}.log
+      - name: swift test (${{ matrix.conf }})
+        shell: bash
+        run: |
+          set -o pipefail
+          swift test --package-path IdunnKit -c ${{ matrix.conf }} -Xswiftc -enable-testing 2>&1 | tee -a swift-${{ matrix.conf }}.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: swift-${{ matrix.conf }}
+          path: swift-${{ matrix.conf }}.log
+
+  resultat:
+    # Actions går inte att läsa från en lokal session utan gh. Sammanfattningen läggs därför på grenen
+    # ci-resultat: git fetch origin ci-resultat && git show origin/ci-resultat:resultat/<sha>.txt
+    needs: swift-test
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: loggar
+          merge-multiple: true
+      - name: Lägg sammanfattningen på ci-resultat
+        shell: bash
+        run: |
+          set -euo pipefail
+          PRIVAT=$(tr -d '[:space:]' < PRIVAT_COMMIT)
+          {
+            echo "${PRIVAT} spegel $(date -u +%FT%TZ) run ${GITHUB_RUN_ID}"
+            python3 tools/arbetssatt/ci_sammanfattning.py loggar/*.log || true
+          } > /tmp/resultat.txt
+          cat /tmp/resultat.txt
+          git config user.name "idunn-ci"
+          git config user.email "idunn-ci@users.noreply.github.com"
+          for i in 1 2 3 4 5; do
+            rm -rf /tmp/r && mkdir /tmp/r && cd /tmp/r && git init -q
+            git remote add origin "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+            if git fetch -q origin ci-resultat 2>/dev/null; then git checkout -q -b ci-resultat FETCH_HEAD; else git checkout -q --orphan ci-resultat; fi
+            mkdir -p resultat && cp /tmp/resultat.txt "resultat/${PRIVAT}.txt" && cp /tmp/resultat.txt senaste.txt
+            git add -A && git -c user.name=idunn-ci -c user.email=idunn-ci@users.noreply.github.com commit -qm "resultat ${PRIVAT}"
+            git push -q origin ci-resultat && break
+            sleep $((i * 3))
+          done

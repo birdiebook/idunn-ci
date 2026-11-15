@@ -1,0 +1,138 @@
+# Xcode-projektet genereras ur den här filen (XcodeGen) och är gitignorerat.
+# Ingen Mac behövs: Codemagic kör `xcodegen generate` före bygget.
+name: Idunn
+options:
+  bundleIdPrefix: se.birdiebook
+  # BESLUT B49: 18.0 för diagrammens håll-och-dra (UIGestureRecognizerRepresentable).
+  deploymentTarget:
+    iOS: "18.0"
+packages:
+  IdunnKit:
+    path: IdunnKit
+targets:
+  Idunn:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    dependencies:
+      - package: IdunnKit
+        product: WhoopImport
+      - package: IdunnKit
+        product: HeartRate
+      - package: IdunnKit
+        product: Night
+      - package: IdunnKit
+        product: WhoopFrames
+      # BESLUT B47. Ljudet under natten: måtten, klasserna, filen och klippen.
+      - package: IdunnKit
+        product: Sound
+      # BESLUT B58. Passet med puls: statistiken, återhämtningen, tillståndsmaskinen och filen.
+      - package: IdunnKit
+        product: Pass
+      # BESLUT B64 och B65. Sömnbehovet: grundbehovet, skulden, kvällens läggdags och veckan utan klocka.
+      - package: IdunnKit
+        product: SleepNeed
+      # BESLUT B106. Konditionen: profilen, den passiva skattningen av VO2 max och Whoops avskrivna tal.
+      - package: IdunnKit
+        product: Fitness
+      # BESLUT B104 och B105. Profilen: markörerna, det inskrivna och normtabellerna.
+      - package: IdunnKit
+        product: Markers
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: se.birdiebook.idun
+        MARKETING_VERSION: "0.1.0"
+        # Skrivs över vid varje bygge: senaste TestFlight-bygget + 1 (codemagic.yaml, agvtool).
+        CURRENT_PROJECT_VERSION: "1"
+        VERSIONING_SYSTEM: apple-generic
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_VERSION: "5.0"
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Idunn
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # Utan den här fastnar varje bygge på exportfrågan i App Store Connect.
+        ITSAppUsesNonExemptEncryption: false
+        # Bandet (PLAN.md I2).
+        NSBluetoothAlwaysUsageDescription: Idunn hämtar nattens mätningar från ditt armband.
+        # BESLUT B47. Mikrofonen under natten (PLAN.md J2). Texten visas i frågan om tillåtelse.
+        NSMicrophoneUsageDescription: Idunn lyssnar under natten för att se vad som påverkar din sömn. Ljudet stannar på telefonen.
+        # BESLUT B107. Platsen under ett pass ute (App/PassPlats.swift): sträcka, tempo och karta. Texten visas i frågan om
+        # tillåtelse; platsen läses bara medan ett pass ute pågår och stannar på telefonen.
+        NSLocationWhenInUseUsageDescription: Idunn läser var du är under ett pass ute, för sträcka, tempo och karta. Platsen stannar på telefonen.
+        # Inspelningen fortsätter med appen i bakgrunden och skärmen låst, och
+        # iOS väcker appen igen för bandet (state restoration, App/Recorder.swift).
+        # `audio` håller ljudet vid liv under natten (App/SoundListener.swift, BESLUT B47).
+        UIBackgroundModes:
+          - bluetooth-central
+          - audio
+          # BESLUT B107. Platsen fortsätter med skärmen låst medan ett pass ute pågår.
+          - location
+        # BESLUT B22. Documents/recordings syns i Filer och i Apple Devices/Finder
+        # över kabel, så att färdiga nätter kan kopieras till användaren dator.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+    scheme: {}
+
+  # BESLUT B20. Ritar appens vyer till PNG i simulatorn, med påhittad data
+  # (IdunnKit-målet DemoData, som appen själv aldrig länkar in). Körs av
+  # Codemagics `ios-prov` via `python tools/prov.py`, aldrig vid TestFlight.
+  IdunnProv:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Prov
+    dependencies:
+      - target: Idunn
+      - package: IdunnKit
+        product: DemoData
+      - package: IdunnKit
+        product: Sound
+      - package: IdunnKit
+        product: Night
+      - package: IdunnKit
+        product: HeartRate
+      - package: IdunnKit
+        product: WhoopImport
+      - package: IdunnKit
+        product: WhoopFrames
+      - package: IdunnKit
+        product: SleepNeed
+      - package: IdunnKit
+        product: Fitness
+      # BESLUT B107. Provet av passet ute ritar ett spår ur Pass.
+      - package: IdunnKit
+        product: Pass
+      - package: IdunnKit
+        product: Markers
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: se.birdiebook.idun.prov
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "5.0"
+        # Testet körs inuti appen, så att `@testable import Idunn` når vyerna.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Idunn.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Idunn"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        # Simulatorn kräver ingen signering (även satt i codemagic.yaml).
+        CODE_SIGNING_ALLOWED: "NO"
+
+schemes:
+  # Eget schema, så att `Idunn`-schemat som TestFlight arkiverar är orört.
+  IdunnProv:
+    build:
+      targets:
+        Idunn: all
+        IdunnProv: [test]
+    test:
+      config: Debug
+      language: sv
+      region: SE
+      targets:
+        - IdunnProv

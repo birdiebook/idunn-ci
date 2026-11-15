@@ -1,0 +1,77 @@
+# SPEGELNS CI (BESLUT B115). Den här filen ligger i det privata repot som spegel/workflows/app.yml och läggs av
+# tools/spegla.py på .github/workflows/app.yml i den publika spegeln. Kompilerar appen och provets testmål för
+# simulatorn, utan att köra något, och lägger GRÖNT eller RÖTT med felraderna som resultat/<privat-hash>-app.txt
+# på spegelns gren ci-resultat (hashen står i filen PRIVAT_COMMIT). I ett publikt repo är macOS-minuterna fria.
+name: app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bygg:
+    runs-on: macos-15
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Projektet (XcodeGen)
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Kompilera appen och provet (build-for-testing, simulator)
+        # Samma schema, konfiguration och flaggor som provet hos Codemagic (codemagic.yaml, ios-prov), men bara bygget.
+        shell: bash
+        run: |
+          set +e
+          xcodebuild build-for-testing \
+            -project Idunn.xcodeproj \
+            -scheme IdunnProv \
+            -destination "generic/platform=iOS Simulator" \
+            -configuration Release \
+            ENABLE_TESTABILITY=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            > /tmp/bygge.log 2>&1
+          echo $? > /tmp/kod.txt
+          set -e
+          # Felraderna en gång var, med sökvägen från repots rot. Inga värden ur någon data finns i ett kompileringsfel.
+          grep -E "error:" /tmp/bygge.log | sed "s#${GITHUB_WORKSPACE}/##" | sort -u | head -150 > /tmp/fel.txt || true
+          tail -3 /tmp/bygge.log
+          echo "kod $(cat /tmp/kod.txt), $(wc -l < /tmp/fel.txt) felrader"
+      - name: Lägg resultatet på ci-resultat
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          kod=$(cat /tmp/kod.txt 2>/dev/null || echo 1)
+          PRIVAT=$(tr -d '[:space:]' < "${GITHUB_WORKSPACE}/PRIVAT_COMMIT")
+          {
+            echo "${PRIVAT} spegel $(date -u +%FT%TZ) run ${GITHUB_RUN_ID}"
+            echo "== app (xcodebuild build-for-testing, simulator)"
+            if [ "$kod" = "0" ]; then
+              echo "GRÖNT: appen och provet kompilerar"
+            else
+              echo "RÖTT: bygget föll (kod $kod), $(wc -l < /tmp/fel.txt 2>/dev/null || echo 0) felrader"
+              cat /tmp/fel.txt 2>/dev/null || true
+              if [ ! -s /tmp/fel.txt ]; then tail -40 /tmp/bygge.log 2>/dev/null || true; fi
+            fi
+          } > /tmp/resultat.txt
+          cat /tmp/resultat.txt
+          for i in 1 2 3 4 5; do
+            rm -rf /tmp/r && mkdir /tmp/r && cd /tmp/r && git init -q
+            git remote add origin "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+            if git fetch -q origin ci-resultat 2>/dev/null; then git checkout -q -b ci-resultat FETCH_HEAD; else git checkout -q --orphan ci-resultat; fi
+            mkdir -p resultat && cp /tmp/resultat.txt "resultat/${PRIVAT}-app.txt"
+            git add -A && git -c user.name=idunn-ci -c user.email=idunn-ci@users.noreply.github.com commit -qm "app ${PRIVAT}"
+            git push -q origin ci-resultat && break
+            sleep $((i * 3))
+          done
+      - name: Fäll jobbet om bygget föll
+        shell: bash
+        run: exit "$(cat /tmp/kod.txt)"

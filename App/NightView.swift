@@ -1,0 +1,768 @@
+import SwiftUI
+import Night
+import Sound
+
+/// BESLUT B62 · BESLUT B63 · BESLUT B71 · METOD M18 · METOD M32 · METOD M37 · METOD M50 · METOD M52 · METOD M56
+/// Natten (tryck på kurvan eller på Sömn-ringen): nattens kurva med axel, Sömnperiod · Sömn · Effektivitet, kortet Över
+/// natten (HRV, Hudtemp, Andning, Rörelse, Ljud och Slag för slag), Sömnpoängen med sina tre delar, stadierna mot ditt
+/// normala, medelpuls, rörelse och snarkning mot ditt normala, Sömnbehov, Effektivitet med uppvak, Sömnstress,
+/// Regelbundenhet och veckan. Det som hör till spåret H ritas när dess tal finns (BESLUT B65): sömnbehovet och
+/// sömnbristen sedan H1, poängen sedan H2, stressen när H4 landar. Kortet "Ditt fönster" visas inte (BESLUT B71).
+/// Nattens detaljerade kurva med puls, HRV och andning var för sig nås från listan Nätter på Data (`NightCurveView`).
+///
+/// METOD M55 · BESLUT B70. "Ändra" uppe till höger öppnar bladet med Somnade och Vaknade (`SömnÄndringBlad`); natten
+/// räknas då om och visas som den blev, med ett märke vid Sömnperiod.
+struct NightScreen: View {
+    let summary: NightSummary
+    var huvudtal: Huvudtal = .tom
+    @EnvironmentObject private var recorder: Recorder
+    @State private var bundle: NightLoader.CurveBundle?
+    @State private var visaÄndra = false
+
+    /// METOD M55. Natten som den är nu: efter en ändring räknas den om och listan publiceras på nytt, med samma id.
+    private var natt: NightSummary {
+        recorder.summaries.first { (s: NightSummary) -> Bool in s.id == summary.id } ?? summary
+    }
+
+    var body: some View {
+        ScrollView {
+            NightStack(summary: natt, bundle: bundle,
+                       values: Trends.idunValues(recorder.summaries.compactMap(\.idunNight)), huvudtal: huvudtal)
+        }
+        .background(Tema.bg)
+        .navigationTitle(natt.wakeDay.map { (d: WakeDay) -> String in Fmt.weekday(d) + " " + Fmt.dayMonth(d) } ?? "Natten")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if natt.canEditSleep {
+                    ÄndraKnapp(arbetar: recorder.recomputingEdit) { visaÄndra = true }
+                }
+            }
+        }
+        .sheet(isPresented: $visaÄndra) {
+            blad
+        }
+        .task(id: natt) {
+            bundle = await NightLoader.sharedBundle(for: natt, priority: .userInitiated)
+        }
+    }
+
+    /// METOD M55 · BESLUT B70. Bladet för nattens sömnperiod: öppnar med ändringen om den finns, annars med perioden.
+    @ViewBuilder private var blad: some View {
+        let s: NightSummary = natt
+        if let dag = s.wakeDay,
+           let från = SömnÄndringBlad.startvärden(s, ändring: recorder.sleepEdits[dag]) {
+            SömnÄndringBlad(dag: dag, zon: s.utcOffsetSeconds, frånSomnade: från.somnade, frånVaknade: från.vaknade,
+                            ändrad: s.isEdited || recorder.sleepEdits[dag] != nil,
+                            hittad: SömnÄndringBlad.hittadPeriod(s),
+                            spara: { (e: SleepEdit) -> Void in
+                                recorder.setSleepEdit(e, day: dag)
+                                visaÄndra = false
+                            },
+                            återställ: {
+                                recorder.setSleepEdit(nil, day: dag)
+                                visaÄndra = false
+                            },
+                            avbryt: { visaÄndra = false })
+                .presentationDetents([.large])
+                .presentationBackground(Tema.bg)
+        }
+    }
+}
+
+/// Natten utan rullning, så att `ImageRenderer` kan rita den (IdunnProv). `values` är Idunns nätter (`Trends.idunValues`),
+/// som ger varje mått dess normalområde och veckans staplar.
+///
+/// BESLUT B83. Ett tryck på ett stadium i förklaringen färgar kurvan där stadiet ligger; `stadium` är det valda när vyn
+/// ritas första gången (provet ritar Natten med ett valt stadium).
+struct NightStack: View {
+    let summary: NightSummary
+    var bundle: NightLoader.CurveBundle?
+    var values: Trends.Values
+    var huvudtal: Huvudtal
+    @State private var valt: SleepStage?
+
+    init(summary: NightSummary, bundle: NightLoader.CurveBundle? = nil, values: Trends.Values = [:],
+         huvudtal: Huvudtal = .tom, stadium: SleepStage? = nil) {
+        self.summary = summary
+        self.bundle = bundle
+        self.values = values
+        self.huvudtal = huvudtal
+        _valt = State(initialValue: stadium)
+    }
+
+    private var day: WakeDay { summary.wakeDay ?? WakeDay(daysSince1970: 0) }
+    /// BESLUT B65. Sömnstressen (H4) ritas bara när den finns.
+    private var harStress: Bool { h.stressHigh != nil || h.stressCurve != nil }
+    /// BESLUT B65. Huvudtalen med nattens sömnbehov.
+    private var h: Huvudtal { huvudtal.för(day) }
+    private var layers: NightLayers.Layers? { bundle?.layers }
+    private var hasStages: Bool { !(layers?.stages.isEmpty ?? true) }
+
+    private func nr(_ m: Trends.Measure) -> MorningCard.Row? {
+        MorningCard.nightRow(m, day: day, idun: values)
+    }
+
+    private var dagar7: [WakeDay] { (0..<7).map { (k: Int) -> WakeDay in day - (6 - k) } }
+    private var etiketter7: [String] { dagar7.map { (d: WakeDay) -> String in Fmt.weekday(d) } }
+
+    /// Måttets sju senaste nätter, äldst först; en natt utan tal är `nil`.
+    private func vecka(_ m: Trends.Measure, _ skala: Double = 1) -> [Double?] {
+        let v: [WakeDay: Double] = values[m] ?? [:]
+        return dagar7.map { (d: WakeDay) -> Double? in v[d].map { (x: Double) -> Double in x * skala } }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            NattKurva(curve: bundle?.curve, layers: layers, höjd: 220, axel: true, valt: valt, peka: true)
+                .padding(.horizontal, -16)
+                .padding(.top, 6)
+            if hasStages {
+                // BESLUT B83. Samma stadium igen släcker, ett annat byter.
+                StadieTecken(valt: valt, välj: { (s: SleepStage) -> Void in valt = valt == s ? nil : s })
+                    .padding(.top, 2)
+            }
+            siffror
+            lagerkort.padding(.bottom, 12)
+            // BESLUT B65. Poängen (H2) ritas bara när talet finns.
+            if h.sleepScore != nil {
+                Sektion(text: "Sömnpoäng")
+                poäng.padding(.top, 10).padding(.bottom, 12)
+            }
+            Sektion(text: "Stadier mot ditt normala")
+            stadier.padding(.top, 10)
+            Sektion(text: "Puls, rörelse och ljud")
+            pulsRörelseLjud.padding(.top, 10)
+            if h.needHours != nil {
+                Sektion(text: "Sömnbehov")
+                behov.padding(.top, 10)
+            }
+            Sektion(text: "Effektivitet")
+            effektivitet.padding(.top, 10)
+            if harStress {
+                Sektion(text: "Sömnstress")
+                stress.padding(.top, 10)
+            }
+            Sektion(text: "Regelbundenhet")
+            regelbundenhet.padding(.top, 10)
+            Sektion(text: "Veckan")
+            veckan.padding(.top, 10)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 28)
+    }
+
+    // MARK: Överst
+
+    private var periodMinuter: Double? {
+        if let l = layers { return (l.period.upperBound - l.period.lowerBound) / 60 }
+        if let a = summary.start, let b = summary.end { return b.timeIntervalSince(a) / 60 }
+        return nil
+    }
+
+    /// BESLUT B83 · BESLUT B73. Början eller slutet av natten saknas i bandets data: några ord under Sömnperiod, så att
+    /// det syns varför tiden kan vara fel. En ändrad period är användaren egen och märks inte.
+    private var saknas: String? {
+        guard !summary.isEdited else { return nil }
+        switch (summary.incompleteStart == true, summary.incompleteEnd == true) {
+        case (true, true): return "början och slutet saknas"
+        case (true, false): return "början saknas"
+        case (false, true): return "slutet saknas"
+        case (false, false): return nil
+        }
+    }
+
+    private var siffror: some View {
+        HStack(alignment: .top) {
+            // METOD M55 · BESLUT B70. Märket: sömnperioden är användaren ändring.
+            stat("Sömnperiod", periodMinuter.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–",
+                 märke: summary.isEdited, under: saknas)
+            Spacer()
+            stat("Sömn", summary.sleepMinutes.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
+            Spacer()
+            stat("Effektivitet", summary.efficiency.map { (e: Double) -> String in "\(Int(e.rounded()))%" } ?? "–")
+        }
+        .padding(.vertical, 14)
+    }
+
+    private func stat(_ namn: String, _ värde: String, märke: Bool = false, under: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Text(namn.uppercased())
+                    .font(.system(size: 10))
+                    .tracking(1)
+                    .foregroundStyle(Tema.faint)
+                if märke {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Tema.accent)
+                        .accessibilityLabel("Ändrad")
+                }
+            }
+            Text(värde)
+                .font(Tema.mono(20, .bold))
+                .foregroundStyle(värde == "–" ? Tema.faint : Tema.text)
+            if let u = under {
+                HStack(spacing: 3) {
+                    Image(systemName: "exclamationmark.circle")
+                        .font(.system(size: 9, weight: .bold))
+                    Text(u)
+                        .font(.system(size: 10))
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+                .foregroundStyle(Tema.yellow)
+            }
+        }
+    }
+
+    // MARK: Över natten
+
+    private var lagerkort: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Kortrubrik(text: "Över natten")
+            HStack(spacing: 8) {
+                lagerlänk(.hrv)
+                lagerlänk(.temp)
+                lagerlänk(.resp)
+            }
+            HStack(spacing: 8) {
+                lagerlänk(.move)
+                lagerlänk(.ljud)
+                NavigationLink {
+                    PoincareView(summary: summary)
+                } label: {
+                    lagerknapp("Slag för slag", "chart.dots.scatter")
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .kort()
+    }
+
+    private func lagerlänk(_ m: NightMetric) -> some View {
+        NavigationLink {
+            NightMetricScreen(metric: m, summary: summary)
+        } label: {
+            lagerknapp(m.title, m.symbol)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func lagerknapp(_ namn: String, _ symbol: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(Tema.accent)
+                .frame(height: 20)
+            Text(namn)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Tema.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity)
+        .background(Tema.card2, in: RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
+    }
+
+    // MARK: Sömnpoäng (spåret H, H2)
+
+    /// BESLUT B71 · METOD M56. De tre delarna med lika vikt, i `Huvudtal.scoreParts` ordning.
+    private static let poängDelar: [(String, String)] = [
+        ("Mängd", "sömn mot behov"), ("Kontinuitet", "få uppvak"), ("Regelbundenhet", "som dina nätter"),
+    ]
+
+    /// Delarna som har ett tal (BESLUT B65: regelbundenheten saknas första natten).
+    private var delarMedTal: [(String, String, Double)] {
+        (0..<Self.poängDelar.count).compactMap { (i: Int) -> (String, String, Double)? in
+            guard let delar = h.scoreParts, i < delar.count, let v = delar[i] else { return nil }
+            return (Self.poängDelar[i].0, Self.poängDelar[i].1, v)
+        }
+    }
+
+    private var poäng: some View {
+        let delar: [(String, String, Double)] = delarMedTal
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 16) {
+                HuvudRing(värde: h.sleepScore, färg: h.sleepScore.map { (v: Int) -> Color in
+                    Tema.score(Double(v))
+                } ?? Tema.faint, storlek: 84, linje: 7, siffra: 24)
+                Text("Tre delar som väger lika. Grön från 85.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Tema.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.bottom, 4)
+            ForEach(0..<delar.count, id: \.self) { (i: Int) in
+                poängrad(delar[i].0, delar[i].1, delar[i].2, sista: i == delar.count - 1)
+            }
+        }
+        .kort()
+    }
+
+    private func poängrad(_ namn: String, _ under: String, _ x: Double, sista: Bool) -> some View {
+        let c: Color = Tema.score(x)
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(namn).font(.system(size: 12)).foregroundStyle(Tema.dim)
+                Text(under).font(.system(size: 10)).foregroundStyle(Tema.faint)
+            }
+            Spacer(minLength: 4)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Tema.track)
+                Capsule().fill(c).frame(width: 92 * CGFloat(min(max(x, 0), 100) / 100))
+            }
+            .frame(width: 92, height: 6)
+            Text("\(Int(x.rounded()))")
+                .font(Tema.mono(14))
+                .foregroundStyle(c)
+                .frame(width: 44, alignment: .trailing)
+        }
+        .padding(.vertical, 9)
+        .overlay(alignment: .bottom) {
+            if !sista { Rectangle().fill(Tema.line).frame(height: 1) }
+        }
+    }
+
+    // MARK: Stadierna, puls, rörelse och ljud mot ditt normala
+
+    /// BESLUT B93. Stadierna som en helhet: natten som en delad stapel i stadiernas färger, ditt normala som en tunn
+    /// stapel under (områdenas mitt), och talen i fyra kolumner. Under talet står avvikelsen från områdets närmaste
+    /// kant när stadiet ligger utanför (gul sämre, blå bättre, som bandraden), annars andelen av natten.
+    private var stadier: some View {
+        let rader: [(String, Trends.Measure, Double?, Int, SleepStage)] = [
+            ("Vaken", .awakeTime, summary.awakeMinutes, -1, .wake), ("Lätt", .lightSleep, summary.lightMinutes, 1, .light),
+            ("Djup", .deepSleep, summary.deepMinutes, 1, .deep), ("REM", .remSleep, summary.remMinutes, 1, .rem),
+        ]
+        let områden: [ClosedRange<Double>?] = rader.map { (r: (String, Trends.Measure, Double?, Int, SleepStage))
+            -> ClosedRange<Double>? in
+            r.2 == nil ? nil : nr(r.1)?.range
+        }
+        let total: Double = rader.reduce(0) { (s: Double, r: (String, Trends.Measure, Double?, Int, SleepStage))
+            -> Double in
+            s + (r.2 ?? 0)
+        }
+        let natt: [(Double, Color)] = rader.map { (r: (String, Trends.Measure, Double?, Int, SleepStage))
+            -> (Double, Color) in
+            (r.2 ?? 0, NattRitning.färg(r.4))
+        }
+        // Ditt normala ritas bara när alla fyra har ett område: annars vore delarna inte en hel natt.
+        let harNormalt: Bool = !områden.contains { (o: ClosedRange<Double>?) -> Bool in o == nil }
+        let normalt: [(Double, Color)] = (0..<rader.count).map { (i: Int) -> (Double, Color) in
+            let mitt: Double = områden[i].map { (o: ClosedRange<Double>) -> Double in
+                (o.lowerBound + o.upperBound) / 2
+            } ?? 0
+            return (mitt, NattRitning.färg(rader[i].4))
+        }
+        return VStack(alignment: .leading, spacing: 0) {
+            Delstapel(delar: natt, höjd: 16)
+            if harNormalt {
+                Delstapel(delar: normalt, höjd: 5)
+                    .opacity(0.55)
+                    .padding(.top, 5)
+            }
+            HStack(alignment: .top, spacing: 6) {
+                ForEach(0..<rader.count, id: \.self) { (i: Int) in
+                    stadiekolumn(rader[i].0, rader[i].2, områden[i], bra: rader[i].3,
+                                 färg: NattRitning.färg(rader[i].4), total: total)
+                }
+            }
+            .padding(.top, 14)
+            if harNormalt {
+                HStack(spacing: 12) {
+                    Tecken(färg: Tema.dim, text: "i natt")
+                    Tecken(färg: Tema.dim.opacity(0.55), text: "ditt normala", smal: true)
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(Tema.dim)
+                .padding(.top, 10)
+            }
+        }
+        .kort()
+    }
+
+    private func stadiekolumn(_ namn: String, _ värde: Double?, _ område: ClosedRange<Double>?, bra: Int, färg: Color,
+                              total: Double) -> some View {
+        // Avvikelsen i minuter från områdets närmaste kant; 0 inom området eller utan område.
+        var avvikelse: Double = 0
+        if let v = värde, let o = område {
+            if v < o.lowerBound { avvikelse = v - o.lowerBound }
+            if v > o.upperBound { avvikelse = v - o.upperBound }
+        }
+        let sämre: Bool = (avvikelse > 0) != (bra > 0)
+        var under: String = " "
+        if let v = värde {
+            if avvikelse != 0 {
+                under = (avvikelse > 0 ? "+" : "−") + Fmt.hm(minutes: abs(avvikelse))
+            } else if total > 0 {
+                under = "\(Int((v / total * 100).rounded())) %"
+            }
+        }
+        return VStack(alignment: .leading, spacing: 3) {
+            Tecken(färg: färg, text: namn)
+                .font(.system(size: 11))
+                .foregroundStyle(Tema.dim)
+            Text(värde.map { (v: Double) -> String in Fmt.hm(minutes: v) } ?? "–")
+                .font(Tema.mono(17, .bold))
+                .foregroundStyle(värde == nil ? Tema.faint : Tema.text)
+            Text(under)
+                .font(Tema.mono(11))
+                .foregroundStyle(avvikelse == 0 ? Tema.faint : (sämre ? Tema.yellow : Tema.accent))
+        }
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var pulsRörelseLjud: some View {
+        let medel: MorningCard.Row? = nr(.meanHeartRate)
+        let rörelse: MorningCard.Row? = nr(.movement)
+        let snark: MorningCard.Row? = nr(.snoring)
+        return VStack(spacing: 0) {
+            BandRad(namn: "Medelpuls", text: medel.map { (r: MorningCard.Row) -> String in Fmt.num(r.value) },
+                    värde: medel?.value, område: medel?.range, axel: medel?.track, bra: -1)
+            länk(.move) {
+                BandRad(namn: "Rörelse", text: rörelse.map { (r: MorningCard.Row) -> String in Fmt.num(r.value) + " min" },
+                        värde: rörelse?.value, område: rörelse?.range, axel: rörelse?.track, bra: -1, vidare: true)
+            }
+            länk(.ljud) {
+                BandRad(namn: "Snarkning", text: snark.map { (r: MorningCard.Row) -> String in Fmt.num(r.value, 1) },
+                        värde: snark?.value, område: snark?.range, axel: snark?.track, bra: -1, vidare: true, sista: true)
+            }
+        }
+        .radkort()
+    }
+
+    @ViewBuilder private func länk<Inre: View>(_ m: NightMetric, @ViewBuilder _ inre: () -> Inre) -> some View {
+        let innehåll: Inre = inre()
+        NavigationLink {
+            NightMetricScreen(metric: m, summary: summary)
+        } label: {
+            innehåll
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Sömnbehov (spåret H)
+
+    private var behov: some View {
+        let sömn: Double? = summary.sleepMinutes.map { (m: Double) -> Double in m / 60 }
+        let andel: String = {
+            guard let b = h.needHours, b > 0, let s = sömn else { return "–" }
+            return "\(Int((s / b * 100).rounded()))%"
+        }()
+        // BESLUT B94. Sömnen och behovet som två staplar på samma skala, med talet för varje stapels längd till höger.
+        // Staplarna tonar in från vänster, så att blicken landar i änden. Behovets delar står som tecken under; en del
+        // som är noll ritas inte.
+        let behovet: Double? = h.needHours
+        let skala: Double = max(behovet ?? 0, sömn ?? 0)
+        let behovsdelar: [(Double, Color, String, String)] = {
+            guard let a = h.needBase, let b = h.needStrain, let c = h.needDebt else { return [] }
+            let alla: [(Double, Color, String, String)] = [
+                (a, Tema.still, "Grund", ""), (b, Tema.rem, "Pass", "+"), (c, Tema.yellow, "Brist", "+"),
+            ]
+            // Under en halv minut skrivs delen som 0:00, och då ritas den inte.
+            return alla.filter { (d: (Double, Color, String, String)) -> Bool in (d.0 * 60).rounded() >= 1 }
+        }()
+        let behovsstapel: [(Double, Color)] = {
+            if !behovsdelar.isEmpty {
+                return behovsdelar.map { (d: (Double, Color, String, String)) -> (Double, Color) in (d.0, d.1) }
+            }
+            return behovet.map { (b: Double) -> [(Double, Color)] in [(b, Tema.still)] } ?? []
+        }()
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(andel).font(Tema.mono(26, .bold)).foregroundStyle(andel == "–" ? Tema.faint : Tema.text)
+            stapelrad(sömn.map { (s: Double) -> [(Double, Color)] in [(s, Tema.accent)] } ?? [],
+                      andel: skala > 0 ? (sömn ?? skala) / skala : 1,
+                      tal: sömn.map { (s: Double) -> String in Fmt.hm(hours: s) })
+                .padding(.top, 4)
+            stapelrad(behovsstapel, andel: skala > 0 ? (behovet ?? skala) / skala : 1,
+                      tal: behovet.map { (b: Double) -> String in Fmt.hm(hours: b) })
+            if !behovsdelar.isEmpty {
+                HStack(spacing: 12) {
+                    ForEach(0..<behovsdelar.count, id: \.self) { (i: Int) in
+                        let d: (Double, Color, String, String) = behovsdelar[i]
+                        HStack(spacing: 4) {
+                            Tecken(färg: d.1, text: d.2).foregroundStyle(Tema.dim)
+                            Text(d.3 + Fmt.hm(hours: d.0)).font(Tema.mono(10)).foregroundStyle(Tema.text)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .font(.system(size: 10))
+                .lineLimit(1)
+                .padding(.top, 2)
+            }
+        }
+        .kort()
+    }
+
+    /// BESLUT B94. En stapel som fyller `andel` av bredden och tonar in från vänster, med sitt tal till höger.
+    private func stapelrad(_ delar: [(Double, Color)], andel: Double, tal: String?) -> some View {
+        HStack(spacing: 10) {
+            GeometryReader { (g: GeometryProxy) in
+                Delstapel(delar: delar, höjd: 10)
+                    .frame(width: g.size.width * CGFloat(min(max(andel, 0), 1)))
+                    .mask(LinearGradient(stops: [Gradient.Stop(color: Color.black.opacity(0.1), location: 0),
+                                                 Gradient.Stop(color: Color.black, location: 0.62)],
+                                         startPoint: .leading, endPoint: .trailing))
+            }
+            .frame(height: 10)
+            Text(tal ?? "–")
+                .font(Tema.mono(15))
+                .foregroundStyle(tal == nil ? Tema.faint : Tema.text)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(minWidth: 44, alignment: .trailing)
+        }
+    }
+
+    private func behovsrad(_ c: Color, _ namn: String, _ v: Double?, _ tecken: String, sd: Double? = nil) -> some View {
+        HStack {
+            HStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 8, height: 8)
+                Text(namn)
+            }
+            Spacer(minLength: 4)
+            // BESLUT B81. Grundbehovet utan ±.
+            Text(v.map { (h: Double) -> String in tecken + Fmt.hm(hours: h) }
+                 ?? "–")
+                .font(Tema.mono(12))
+                .foregroundStyle(v == nil ? Tema.faint : Tema.text)
+        }
+        .font(.system(size: 12))
+        .foregroundStyle(Tema.dim)
+    }
+
+    // MARK: Effektivitet
+
+    private var effektivitet: some View {
+        let sov: Double? = summary.sleepMinutes
+        let vaken: Double? = {
+            guard let p = periodMinuter, let s = sov else { return nil }
+            return max(0, p - s)
+        }()
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(summary.efficiency.map { (e: Double) -> String in "\(Int(e.rounded()))%" } ?? "–")
+                    .font(Tema.mono(26, .bold))
+                    .foregroundStyle(summary.efficiency == nil ? Tema.faint : Tema.text)
+                Spacer()
+                Text(summary.wakeBouts.map { (n: Int) -> String in "\(n) uppvak" } ?? "–")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Tema.dim)
+            }
+            Effektivitetsrems(period: layers?.period, vakna: layers?.awake ?? [])
+            behovsrad(Tema.accent, "Sovande", sov.map { (m: Double) -> Double in m / 60 }, "")
+            behovsrad(Tema.awake, "Vaken", vaken.map { (m: Double) -> Double in m / 60 }, "")
+        }
+        .kort()
+    }
+
+    // MARK: Sömnstress (spåret H)
+
+    private var stress: some View {
+        let hög: Double? = h.stressHigh
+        let andel: String = {
+            guard let h = hög, let s = summary.sleepMinutes, s > 0 else { return "–" }
+            return "\(Int((h * 60 / s * 100).rounded()))%"
+        }()
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(andel).font(Tema.mono(26, .bold)).foregroundStyle(andel == "–" ? Tema.faint : Tema.text)
+                Spacer()
+                Text("av natten med hög stress").font(.system(size: 12)).foregroundStyle(Tema.dim)
+            }
+            Stresskurva(kurva: h.stressCurve)
+            stressrad(Tema.red, "Hög", "≥ 2", h.stressHigh)
+            stressrad(Tema.yellow, "Mellan", "1–2", h.stressMid)
+            stressrad(Color(rgb: 0x4A6F8A), "Låg", "< 1", h.stressLow)
+        }
+        .kort()
+    }
+
+    private func stressrad(_ c: Color, _ namn: String, _ gräns: String, _ v: Double?) -> some View {
+        HStack {
+            HStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 8, height: 8)
+                Text(namn)
+                Text(gräns).foregroundStyle(Tema.faint)
+            }
+            Spacer(minLength: 4)
+            Text(v.map { (h: Double) -> String in Fmt.hm(hours: h) } ?? "–")
+                .font(Tema.mono(12))
+                .foregroundStyle(v == nil ? Tema.faint : Tema.text)
+        }
+        .font(.system(size: 12))
+        .foregroundStyle(Tema.dim)
+    }
+
+    // MARK: Regelbundenhet
+
+    private var regelbundenhet: some View {
+        let sri: Double? = (values[.regularity] ?? [:])[day]
+        let onset: [Double?] = vecka(.sleepOnset, 1.0 / 60)
+        let wake: [Double?] = vecka(.sleepWake, 1.0 / 60)
+        let nätter: [Regeldiagram.Natt] = (0..<7).map { (i: Int) -> Regeldiagram.Natt in
+            Regeldiagram.Natt(insomning: onset[i].map { (h: Double) -> Double in h + 24 },
+                              uppvaknande: wake[i].map { (h: Double) -> Double in h + 24 }, etikett: etiketter7[i])
+        }
+        let normalA: ClosedRange<Double>? = nr(.sleepOnset)?.range.map { (r: ClosedRange<Double>) -> ClosedRange<Double> in
+            (r.lowerBound / 60 + 24)...(r.upperBound / 60 + 24)
+        }
+        let normalB: ClosedRange<Double>? = nr(.sleepWake)?.range.map { (r: ClosedRange<Double>) -> ClosedRange<Double> in
+            (r.lowerBound / 60 + 24)...(r.upperBound / 60 + 24)
+        }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(sri.map { (v: Double) -> String in "\(Int(v.rounded()))%" } ?? "–")
+                    .font(Tema.mono(26, .bold))
+                    .foregroundStyle(sri == nil ? Tema.faint : Tema.text)
+                Spacer()
+                Text("senaste veckan").font(.system(size: 12)).foregroundStyle(Tema.dim)
+            }
+            Regeldiagram(nätter: nätter, normalInsomning: normalA, normalUppvaknande: normalB)
+            Tecken(färg: Tema.band, text: "din vanliga insomning och uppvakning")
+                .font(.system(size: 10))
+                .foregroundStyle(Tema.dim)
+        }
+        .kort()
+    }
+
+    // MARK: Veckan
+
+    private var veckan: some View {
+        let sömn: [Double?] = vecka(.sleep)
+        let behovet: [Double?] = h.last("need", days: 7, ending: day)
+        let harBehov: Bool = behovet.contains { (v: Double?) -> Bool in v != nil }
+        let brist: [Double?] = h.last("debt", days: 7, ending: day)
+        let harBrist: Bool = brist.contains { (v: Double?) -> Bool in v != nil }
+        let stressD: [Double?] = h.last("stress", days: 7, ending: day)
+        let harStressVecka: Bool = stressD.contains { (v: Double?) -> Bool in v != nil }
+        let djup: [Double?] = vecka(.deepSleep, 1.0 / 60)
+        let rem: [Double?] = vecka(.remSleep, 1.0 / 60)
+        let delar: [[Double?]] = (0..<7).map { (i: Int) -> [Double?] in [djup[i], rem[i]] }
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Kortrubrik(text: harBehov ? "Sömn mot behov" : "Sömn")
+                if harBehov {
+                    // BESLUT B79. Två linjer med talen utskrivna, så att gapet syns direkt.
+                    SömnMotBehov(sömn: sömn, behov: behovet, etiketter: etiketter7)
+                } else {
+                    TidDiagram(värden: sömn, etiketter: etiketter7, ymin: 0, ymax: 10, rutor: 5,
+                               format: { (v: Double) -> String in Fmt.hm(hours: v) })
+                }
+                HStack(spacing: 12) {
+                    Tecken(färg: Tema.accent, text: "sömn", rund: harBehov)
+                    if harBehov { Tecken(färg: Tema.awake, text: "behov", rund: true) }
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(Tema.dim)
+                if harBehov {
+                    // BESLUT B83 · METOD M58. Dagar per läge: sömnen i procent av nattens behov.
+                    Lägesband(lägen: Self.lägen(
+                        Lägesräkning.antal(Self.andelar(sömn, behovet)) { (p: Double) -> Behovsläge in Behovsläge(p) },
+                        Behovsläge.allCases.map { (l: Behovsläge) -> (String, String, Color) in (l.namn, l.gräns, l.färg) }))
+                        .padding(.top, 6)
+                }
+            }
+            .kort()
+            if harBrist {
+                // BESLUT B65. Hela skulden efter varje natt; skalan växer med den.
+                let tak: Double = max(1.5, (brist.compactMap { (v: Double?) -> Double? in v }.max() ?? 0).rounded(.up))
+                VStack(alignment: .leading, spacing: 6) {
+                    Kortrubrik(text: "Sömnbrist")
+                    // BESLUT B83 · METOD M58. Stapeln i lägets färg: låg, måttlig eller hög.
+                    TidDiagram(värden: brist, etiketter: etiketter7, färgFn: { (v: Double) -> Color in Tema.skuld(v) },
+                               ymin: 0, ymax: tak, rutor: 3, format: { (v: Double) -> String in Fmt.hm(hours: v) })
+                    Lägesband(lägen: Self.lägen(
+                        Lägesräkning.antal(brist) { (v: Double) -> Skuldläge in Skuldläge(v) },
+                        Skuldläge.allCases.map { (l: Skuldläge) -> (String, String, Color) in (l.namn, l.gräns, l.färg) }))
+                        .padding(.top, 6)
+                }
+                .kort()
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Kortrubrik(text: "Effektivitet")
+                TidDiagram(värden: vecka(.efficiency), etiketter: etiketter7, typ: .linje, ymin: 70, ymax: 100, rutor: 3,
+                           format: { (v: Double) -> String in "\(Int(v.rounded()))%" })
+            }
+            .kort()
+            if harStressVecka {
+                VStack(alignment: .leading, spacing: 6) {
+                    Kortrubrik(text: "Sömnstress")
+                    TidDiagram(värden: stressD, etiketter: etiketter7, färgFn: { (_: Double) -> Color in Tema.yellow },
+                               ymin: 0, ymax: 3, rutor: 3, format: { (v: Double) -> String in Fmt.hm(hours: v) })
+                    HStack(spacing: 12) {
+                        Tecken(färg: Color(rgb: 0x4A6F8A), text: "låg")
+                        Tecken(färg: Tema.yellow, text: "mellan")
+                        Tecken(färg: Tema.red, text: "hög")
+                    }
+                    .font(.system(size: 10))
+                    .foregroundStyle(Tema.dim)
+                }
+                .kort()
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Kortrubrik(text: "Djup + REM")
+                StapelDiagram(delar: delar, färger: [Tema.deep, Tema.rem], etiketter: etiketter7, ymax: 4.5,
+                              siffra: { (d: [Double?]) -> String? in
+                                  let summa: Double = d.reduce(0) { (a: Double, v: Double?) -> Double in a + (v ?? 0) }
+                                  return summa > 0 ? Fmt.hm(hours: summa) : nil
+                              })
+                HStack(spacing: 12) {
+                    Tecken(färg: Tema.deep, text: "djup")
+                    Tecken(färg: Tema.rem, text: "REM")
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(Tema.dim)
+            }
+            .kort()
+        }
+    }
+}
+
+extension NightStack {
+    /// BESLUT B83. Sömnen i procent av behovet per dag; en dag utan sömn eller behov är `nil`.
+    static func andelar(_ sömn: [Double?], _ behov: [Double?]) -> [Double?] {
+        (0..<min(sömn.count, behov.count)).map { (i: Int) -> Double? in
+            guard let s = sömn[i], let b = behov[i], b > 0 else { return nil }
+            return s / b * 100
+        }
+    }
+
+    /// Lägesbandets rader: namn, gräns och färg per läge med antalet dagar.
+    static func lägen(_ antal: [Int], _ lägen: [(String, String, Color)]) -> [Lägesband.Läge] {
+        (0..<min(antal.count, lägen.count)).map { (i: Int) -> Lägesband.Läge in
+            Lägesband.Läge(namn: lägen[i].0, gräns: lägen[i].1, färg: lägen[i].2, antal: antal[i])
+        }
+    }
+}
+
+/// Ett sömnbehov delat i sina delar, eller ett tomt spår (spåret H): remsor med luft emellan, bredd efter värde.
+struct Fördelning: View {
+    let delar: [(Double, Color)]?
+
+    var body: some View {
+        GeometryReader { (g: GeometryProxy) in
+            if let d = delar, !d.isEmpty {
+                let summa: Double = d.reduce(0) { (a: Double, x: (Double, Color)) -> Double in a + x.0 }
+                let luft: CGFloat = 2
+                let rum: CGFloat = max(0, g.size.width - luft * CGFloat(d.count - 1))
+                HStack(spacing: luft) {
+                    ForEach(0..<d.count, id: \.self) { (i: Int) in
+                        Rectangle()
+                            .fill(d[i].1)
+                            .frame(width: summa > 0 ? rum * CGFloat(d[i].0 / summa) : 0)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+            } else {
+                RoundedRectangle(cornerRadius: 5).fill(Tema.track)
+            }
+        }
+        .frame(height: 10)
+    }
+}
