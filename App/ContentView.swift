@@ -20,16 +20,16 @@ struct ContentView: View {
     @State private var väcktidsval: Väcktidsval?
     /// BESLUT B103. Påminnelsen före läggdags: av eller på, och om notiser är nekade.
     @ObservedObject private var påminnelse = Läggdagspåminnelse.shared
-    /// BESLUT B127. Dagboken: morgonens fråga över hela appen, och kvällens blad.
+    /// BESLUT B128. Dagboken: morgonens fråga över hela appen, och kvällens blad.
     @ObservedObject private var dagbok = DagbokModell.shared
 
-    /// BESLUT B127. Uppvakningsdagen morgonens fråga gäller, eller `nil` när den inte visas.
+    /// BESLUT B128. Uppvakningsdagen morgonens fråga gäller, eller `nil` när den inte visas.
     private var morgonfråga: Int? {
         if case .morgon(let dag)? = dagbok.fråga { return dag }
         return nil
     }
 
-    /// BESLUT B127. Kvällens blad; dras det ner är det "Inte nu".
+    /// BESLUT B128. Kvällens blad; dras det ner är det "Inte nu".
     private var kvällsfråga: Binding<Kvällsfråga?> {
         Binding<Kvällsfråga?>(
             get: { () -> Kvällsfråga? in
@@ -68,7 +68,7 @@ struct ContentView: View {
                 .modifier(IInnehålletsHöjd())
                 .presentationBackground(Tema.bg)
         }
-        // BESLUT B127 · METOD M73. Kvällens taggar: frågas när appen öppnas på kvällen, tills kvällen är besvarad.
+        // BESLUT B128 · METOD M74. Kvällens taggar: frågas när appen öppnas på kvällen, tills kvällen är besvarad.
         .sheet(item: kvällsfråga) { (k: Kvällsfråga) in
             KvällVy(valda: dagbok.dagbok.evening(k.dag)?.tags ?? [],
                     spara: { (taggar: [EveningTag]) -> Void in dagbok.svara(kväll: k.dag, taggar: taggar) },
@@ -76,7 +76,7 @@ struct ContentView: View {
                 .modifier(IInnehålletsHöjd())
                 .presentationBackground(Tema.bg)
         }
-        // BESLUT B127 · METOD M73. Morgonens skattning ges innan nattens tal har synts: frågan täcker hela appen.
+        // BESLUT B128 · METOD M74. Morgonens skattning ges innan nattens tal har synts: frågan täcker hela appen.
         .overlay {
             if let dag = morgonfråga {
                 MorgonfrågaVy(vald: dagbok.dagbok.morning(dag)?.rested,
@@ -138,7 +138,7 @@ struct ContentView: View {
                 recorder.refresh()
                 // BESLUT B47. Ljudet startar när appen öppnas kl 20–04 och slutar när den öppnas efter 05.
                 SoundListener.shared.appBecameActive()
-                // BESLUT B127. Dagboken frågar när appen kommer fram: skattningen på morgonen, taggarna på kvällen.
+                // BESLUT B128. Dagboken frågar när appen kommer fram: skattningen på morgonen, taggarna på kvällen.
                 dagbok.appenÖppnades()
             }
         }

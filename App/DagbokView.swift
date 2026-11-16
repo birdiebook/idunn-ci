@@ -1,7 +1,7 @@
 import SwiftUI
 import Journal
 
-/// BESLUT B127 · METOD M73
+/// BESLUT B128 · METOD M74
 /// Morgonens fråga: hur utvilad, 1–5. Ligger över hela appen tills den är besvarad eller överhoppad, så att svaret
 /// ges innan nattens tal har synts. Tar sina handlingar som värden, så att provet kan rita den.
 struct MorgonfrågaVy: View {
@@ -63,7 +63,7 @@ struct MorgonfrågaVy: View {
     }
 }
 
-/// BESLUT B127 · METOD M73
+/// BESLUT B128 · METOD M74
 /// Kvällens blad: tryck på det som gäller ikväll. En tagg med detaljer (liten eller stor måltid) visar dem när den
 /// är vald; detaljen är valfri. "Inget av det" är också ett svar. Tar sina värden och handlingar utifrån.
 struct KvällVy: View {
@@ -193,14 +193,14 @@ struct KvällVy: View {
     }
 }
 
-/// BESLUT B127 · METOD M73. Dagboken på Data: hur mycket som är loggat mot det jämförelsen behöver, och vägen till
+/// BESLUT B128 · METOD M74. Dagboken på Data: hur mycket som är loggat mot det jämförelsen behöver, och vägen till
 /// kvällens blad och morgonens fråga när man vill ändra ett svar.
 struct DagbokSektion: View {
     let dagbok: Journal
     var onKväll: () -> Void = {}
     var onMorgon: () -> Void = {}
 
-    /// METOD M72. Så många skattningar och så många nätter per tagg behöver jämförelsen.
+    /// METOD M73. Så många skattningar och så många nätter per tagg behöver jämförelsen.
     static let skattningar: Int = 15
     static let nätterPerTagg: Int = 5
 

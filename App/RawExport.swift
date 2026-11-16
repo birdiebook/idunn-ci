@@ -215,7 +215,7 @@ extension NightExport {
             let mål = dir.appendingPathComponent(ProfilModell.fil.lastPathComponent)
             if (try? fm.copyItem(at: ProfilModell.fil, to: mål)) != nil { ut.append(mål) }
         }
-        // BESLUT B127 · METOD M73. Dagboken (`dagbok.json`): kvällens taggar och morgonens skattning, för jämförelsen
+        // BESLUT B128 · METOD M74. Dagboken (`dagbok.json`): kvällens taggar och morgonens skattning, för jämförelsen
         // av nattens mått (`tools/hrv_varianter.py`).
         if fm.fileExists(atPath: DagbokModell.fil.path) {
             let mål = dir.appendingPathComponent(DagbokModell.fil.lastPathComponent)

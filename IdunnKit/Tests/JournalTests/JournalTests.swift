@@ -1,7 +1,7 @@
 import XCTest
 @testable import Journal
 
-/// BESLUT B127 · METOD M73. Dagboken. Alla kvällar, morgnar och tider här är påhittade.
+/// BESLUT B128 · METOD M74. Dagboken. Alla kvällar, morgnar och tider här är påhittade.
 final class JournalTests: XCTestCase {
 
     /// 2031-03-03 00:00 UTC, som dagar sedan 1970.

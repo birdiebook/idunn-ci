@@ -24,7 +24,7 @@ struct DataView: View {
     @ObservedObject private var facit = SoundFacitStore.shared
     /// BESLUT B106. Profilen, Whoops avskrivna tal och skattningen av VO2 max.
     @ObservedObject private var kondition = KonditionModell.shared
-    /// BESLUT B127. Dagboken: kvällens taggar och morgonens skattning.
+    /// BESLUT B128. Dagboken: kvällens taggar och morgonens skattning.
     @ObservedObject private var dagbok = DagbokModell.shared
     @State private var importing = false
     /// PLAN.md A3. Reglaget "Whoop-appen är borta": av som förval.
@@ -118,7 +118,7 @@ struct DataScreen: View {
     var kondition: FitnessStore?
     var skattning: PassiveFitness.Outcome?
     var onWhoopTal: (Int, Double) -> Void = { _, _ in }
-    /// BESLUT B127 · METOD M73. Dagboken och vägen till kvällens blad och morgonens fråga. `nil` (förval) döljer sektionen.
+    /// BESLUT B128 · METOD M74. Dagboken och vägen till kvällens blad och morgonens fråga. `nil` (förval) döljer sektionen.
     var dagbok: Journal?
     var onKväll: () -> Void = {}
     var onMorgon: () -> Void = {}
@@ -141,7 +141,7 @@ struct DataScreen: View {
                                  onWhoopTal: onWhoopTal)
             }
 
-            // BESLUT B127. Dagboken: hur mycket som är loggat, och vägen till att ändra ett svar.
+            // BESLUT B128. Dagboken: hur mycket som är loggat, och vägen till att ändra ett svar.
             if let dagbok {
                 DagbokSektion(dagbok: dagbok, onKväll: onKväll, onMorgon: onMorgon)
             }

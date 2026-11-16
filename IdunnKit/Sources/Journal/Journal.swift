@@ -1,6 +1,6 @@
 import Foundation
 
-/// BESLUT B127 · METOD M73
+/// BESLUT B128 · METOD M74
 /// En tagg som går att sätta på en kväll: något som kan påverka natten som följer. Listan är en inställning
 /// (`JournalTags.standard`); filen sparar bara taggens id, så en ny tagg kräver ingen ny filform.
 public struct JournalTag: Equatable, Sendable, Identifiable {
@@ -16,7 +16,7 @@ public struct JournalTag: Equatable, Sendable, Identifiable {
     }
 }
 
-/// BESLUT B127 · METOD M73. Kvällens taggar som de visas, i den här ordningen.
+/// BESLUT B128 · METOD M74. Kvällens taggar som de visas, i den här ordningen.
 public enum JournalTags {
     public static let standard: [JournalTag] = [
         JournalTag(id: "styrka", title: "Styrkepass", options: ["lätt", "tungt"]),
@@ -37,7 +37,7 @@ public enum JournalTags {
     }
 }
 
-/// BESLUT B127. En vald tagg på en kväll.
+/// BESLUT B128. En vald tagg på en kväll.
 public struct EveningTag: Codable, Equatable, Sendable {
     public var id: String
     public var detail: String?
@@ -48,7 +48,7 @@ public struct EveningTag: Codable, Equatable, Sendable {
     }
 }
 
-/// BESLUT B127 · METOD M73. En besvarad kväll: taggarna för natten som slutar på `wakeDayNumber` (dagar sedan
+/// BESLUT B128 · METOD M74. En besvarad kväll: taggarna för natten som slutar på `wakeDayNumber` (dagar sedan
 /// 1970). En kväll utan taggar är också ett svar: "inget av det".
 public struct JournalEvening: Codable, Equatable, Sendable {
     public var wakeDayNumber: Int
@@ -63,7 +63,7 @@ public struct JournalEvening: Codable, Equatable, Sendable {
     }
 }
 
-/// BESLUT B127 · METOD M73. Morgonens skattning: hur utvilad, 1–5, given innan nattens tal visats.
+/// BESLUT B128 · METOD M74. Morgonens skattning: hur utvilad, 1–5, given innan nattens tal visats.
 public struct JournalMorning: Codable, Equatable, Sendable {
     public var wakeDayNumber: Int
     public var rested: Int
@@ -76,13 +76,13 @@ public struct JournalMorning: Codable, Equatable, Sendable {
     }
 }
 
-/// BESLUT B127 · METOD M73
+/// BESLUT B128 · METOD M74
 /// Dagboken: appens fil `dagbok.json` bredvid nätterna (samma mapp och skyddsklass), och med i "Exportera alla
 /// dygn" så att `tools/hrv_varianter.py` kan läsa den. En kväll och en morgon per uppvakningsdag.
 public struct Journal: Codable, Equatable, Sendable {
     /// Filens namn i appens mapp och i exporten.
     public static let fileName = "dagbok.json"
-    /// METOD M73. Skattningens skala.
+    /// METOD M74. Skattningens skala.
     public static let restedRange: ClosedRange<Int> = 1...5
 
     /// Filens form; höjs om den ändras.
@@ -134,7 +134,7 @@ public struct Journal: Codable, Equatable, Sendable {
 
     public var isEmpty: Bool { evenings.isEmpty && mornings.isEmpty && skippedMornings.isEmpty }
 
-    /// METOD M73. Nätter per tagg, flest först och vid lika i bokstavsordning: det utvärderingen behöver fem av.
+    /// METOD M74. Nätter per tagg, flest först och vid lika i bokstavsordning: det utvärderingen behöver fem av.
     public var nightsPerTag: [TagCount] {
         var antal: [String: Int] = [:]
         for e in evenings {
@@ -163,7 +163,7 @@ public struct Journal: Codable, Equatable, Sendable {
     }
 }
 
-/// METOD M73. Antalet nätter med en tagg.
+/// METOD M74. Antalet nätter med en tagg.
 public struct TagCount: Equatable, Sendable {
     public var id: String
     public var nights: Int
@@ -179,15 +179,15 @@ public enum JournalError: Error, Equatable {
     case unknownVersion
 }
 
-/// BESLUT B127 · METOD M73
+/// BESLUT B128 · METOD M74
 /// När dagboken frågar, och vilken natt ett svar hör till. Dagen är väggklockans, i telefonens zon.
 public enum JournalClock {
-    /// METOD M73. Morgonens fråga ställs när appen öppnas från och med den här timmen och före `morningEnd`.
+    /// METOD M74. Morgonens fråga ställs när appen öppnas från och med den här timmen och före `morningEnd`.
     public static let morningStart: Int = 3
     public static let morningEnd: Int = 14
-    /// METOD M73. Kvällens fråga ställs från och med den här timmen och fram till `morningStart` nästa dygn.
+    /// METOD M74. Kvällens fråga ställs från och med den här timmen och fram till `morningStart` nästa dygn.
     public static let eveningStart: Int = 18
-    /// METOD M73. En kväll som loggas före den här timmen hör till natten som just varit på väg (efter midnatt);
+    /// METOD M74. En kväll som loggas före den här timmen hör till natten som just varit på väg (efter midnatt);
     /// från och med den hör den till natten som kommer. Samma gräns som dygnsfönstret (METOD M26).
     public static let noon: Int = 12
 

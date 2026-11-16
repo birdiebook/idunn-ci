@@ -1,4 +1,4 @@
-// RITAR DAGBOKEN TILL PNG (BESLUT B127, METOD M73): morgonens fråga (`dagbok-morgon`, och med ett givet svar
+// RITAR DAGBOKEN TILL PNG (BESLUT B128, METOD M74): morgonens fråga (`dagbok-morgon`, och med ett givet svar
 // `dagbok-morgon-vald`), kvällens blad utan val (`dagbok-kvall`) och med två taggar valda, en med detalj
 // (`dagbok-kvall-vald`). Prövar också appens väg för filen: fram och tillbaka, och en fil som inte går att läsa.
 //

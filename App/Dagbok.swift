@@ -2,19 +2,19 @@ import Foundation
 import Combine
 import Journal
 
-/// BESLUT B127. Det dagboken frågar om just nu: morgonens skattning eller kvällens taggar, för en uppvakningsdag.
+/// BESLUT B128. Det dagboken frågar om just nu: morgonens skattning eller kvällens taggar, för en uppvakningsdag.
 enum Dagboksfråga: Equatable {
     case morgon(dag: Int)
     case kväll(dag: Int)
 }
 
-/// BESLUT B127. Kvällens blad som ett värde med identitet, för `.sheet(item:)`.
+/// BESLUT B128. Kvällens blad som ett värde med identitet, för `.sheet(item:)`.
 struct Kvällsfråga: Identifiable, Equatable {
     let dag: Int
     var id: Int { dag }
 }
 
-/// BESLUT B127 · METOD M73
+/// BESLUT B128 · METOD M74
 /// Dagboken i appen (PLAN.md U2): kvällens taggar och morgonens skattning, och när appen frågar efter dem.
 /// Räkningen är IdunnKits (`Journal`, `JournalClock`); här sparas filen och hålls frågan som visas. Det som skrivs in
 /// är hälsodata som nätterna: en fil i appens mapp (`dagbok.json`), som bara lämnar telefonen med Exportera alla dygn
@@ -78,7 +78,7 @@ final class DagbokModell: ObservableObject {
 
     private static func zon(_ nu: Date) -> Int { TimeZone.current.secondsFromGMT(for: nu) }
 
-    /// Vad appen ska fråga nu (METOD M73), eller `nil`.
+    /// Vad appen ska fråga nu (METOD M74), eller `nil`.
     private func attFråga(nu: Date) -> Dagboksfråga? {
         guard !låst else { return nil }
         guard let p = JournalClock.prompt(at: nu, utcOffsetSeconds: DagbokModell.zon(nu), journal: dagbok) else {
@@ -122,6 +122,13 @@ final class DagbokModell: ObservableObject {
     func inteNu(kväll dag: Int) {
         uppskjuten = dag
         if fråga == .kväll(dag: dag) { fråga = nil }
+    }
+
+    /// BESLUT B129. Kvällens taggar för natten som slutar på dagen, som ord med små bokstäver ("sen måltid"), i
+    /// listans ordning. Tom utan dag, utan besvarad kväll och i provet.
+    func taggar(dag: Int?) -> [String] {
+        guard let dag, let kväll = dagbok.evening(dag) else { return [] }
+        return kväll.tags.map { (t: EveningTag) -> String in (JournalTags.tag(t.id)?.title ?? t.id).lowercased() }
     }
 
     /// Från Data: öppna kvällens blad för natten som kommer (eller som pågår), också när den redan är besvarad.
