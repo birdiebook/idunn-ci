@@ -840,6 +840,8 @@ struct NattMatt: View {
     var stadier: [NightLayers.StageSpan] = []
     /// Vilken tidsrymd en stapel eller en punkt täcker, sekunder.
     var bredd: TimeInterval = 60
+    /// BESLUT B129 · METOD M75. Nattens mitt, som en svag streckad linje; `nil` ritar ingen.
+    var mitt: TimeInterval? = nil
 
     var body: some View {
         Canvas { (ctx: inout GraphicsContext, size: CGSize) in
@@ -869,6 +871,12 @@ struct NattMatt: View {
             p.addLine(to: CGPoint(x: W, y: y(v)))
             ctx.stroke(p, with: .color(Color.white.opacity(0.05)), lineWidth: 1)
             ctx.etikett(format(v), CGPoint(x: W - 4, y: y(v) - 7), ankare: .trailing)
+        }
+        if let m = mitt, m > t0, m < t1 {
+            var p = Path()
+            p.move(to: CGPoint(x: x(m), y: top))
+            p.addLine(to: CGPoint(x: x(m), y: top + ch))
+            ctx.stroke(p, with: .color(Color.white.opacity(0.16)), style: StrokeStyle(lineWidth: 1, dash: [2, 4]))
         }
         if band.count > 1 {
             var p = Path()
