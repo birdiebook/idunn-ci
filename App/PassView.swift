@@ -16,11 +16,6 @@ struct PassView: View {
     /// BESLUT B110. Konditionen: kortet, skärmen och steptestets värden.
     @ObservedObject private var kondition = KonditionModell.shared
 
-    /// BESLUT B126. Maxpulsen för veckans belastning och zoner, som för sidorna.
-    private var veckaMaxpuls: Double? {
-        kondition.maxpuls ?? PassLoad.maxPulse(from: controller.saved)
-    }
-
     var body: some View {
         PassScreen(phase: controller.state.phase, pass: controller.state.pass, now: controller.now,
                    saved: controller.saved,
@@ -38,9 +33,7 @@ struct PassView: View {
                                         taBortFörslag: { controller.taBortFörslag($0) }),
                    kondition: PassKondition(modell: kondition, slut: controller.steptestSlut,
                                           slag: controller.steptestSlag),
-                   förslag: controller.förslag,
-                   vecka: PassVecka.oversikt(controller.saved, maxpuls: veckaMaxpuls),
-                   veckaMedMaxpuls: veckaMaxpuls != nil)
+                   förslag: controller.förslag)
         .alert("Pass", isPresented: Binding(
             get: { controller.problem != nil },
             set: { if !$0 { controller.problem = nil } }
@@ -124,9 +117,6 @@ struct PassScreen: View {
     var kondition = PassKondition()
     /// BESLUT B121 · METOD M69. Förslag ur bandets historik, senaste först.
     let förslag: [PassDetection.Candidate]
-    /// BESLUT B126 · METOD M72. Veckan hittills och de fyra före; `nil` ger inget kort.
-    let vecka: PassWeek.Overview?
-    let veckaMedMaxpuls: Bool
 
     @State private var openedID: UUID?
     @State private var valtFörslag: Förslagsval?
@@ -135,8 +125,7 @@ struct PassScreen: View {
 
     /// Egen init, så att `@State private` inte kan göra den osynlig för andra filer.
     init(phase: PassRecorder.Phase, pass: Pass?, now: Date, saved: [Pass], actions: PassActions = PassActions(),
-         kondition: PassKondition = PassKondition(), förslag: [PassDetection.Candidate] = [],
-         vecka: PassWeek.Overview? = nil, veckaMedMaxpuls: Bool = false) {
+         kondition: PassKondition = PassKondition(), förslag: [PassDetection.Candidate] = []) {
         self.phase = phase
         self.pass = pass
         self.now = now
@@ -144,8 +133,6 @@ struct PassScreen: View {
         self.actions = actions
         self.kondition = kondition
         self.förslag = förslag
-        self.vecka = vecka
-        self.veckaMedMaxpuls = veckaMedMaxpuls
     }
 
     private struct Förslagsval: Identifiable {
@@ -282,11 +269,6 @@ struct PassScreen: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            // BESLUT B126 · METOD M72. Veckan hittills, före de sparade passen.
-            if let v = vecka, v.hasTraining {
-                VeckaKort(oversikt: v, harMaxpuls: veckaMedMaxpuls)
             }
 
             if !saved.isEmpty {

@@ -16,42 +16,6 @@ enum PassZonText {
         default: return "Vila"
         }
     }
-
-    /// BESLUT B126. Tiden i en zon: "7:36" under en timme, "1:05:00" från en timme.
-    static func tid(_ sekunder: TimeInterval) -> String {
-        let s: Int = max(0, Int(sekunder.rounded()))
-        if s < 3_600 { return String(format: "%d:%02d", s / 60, s % 60) }
-        return String(format: "%d:%02d:%02d", s / 3_600, (s % 3_600) / 60, s % 60)
-    }
-}
-
-/// BESLUT B124 · BESLUT B126. Raderna för tid per pulszon: prick, namn, stapel och tid.
-struct ZonRader: View {
-    let zoner: [PassZones.Share]
-
-    var body: some View {
-        let längst: TimeInterval = max(1, zoner.map { (d: PassZones.Share) -> TimeInterval in d.seconds }.max() ?? 1)
-        VStack(spacing: 8) {
-            ForEach(zoner, id: \.zone) { (d: PassZones.Share) in
-                HStack(spacing: 8) {
-                    Circle().fill(PassZonFarg.color(d.zone)).frame(width: 10, height: 10)
-                    Text(PassZonText.namn(d.zone))
-                        .font(.subheadline)
-                        .frame(width: 96, alignment: .leading)
-                    GeometryReader { (g: GeometryProxy) in
-                        Capsule()
-                            .fill(PassZonFarg.color(d.zone))
-                            .frame(width: max(4, g.size.width * CGFloat(d.seconds / längst)), height: 8)
-                            .frame(maxHeight: .infinity, alignment: .center)
-                    }
-                    .frame(height: 12)
-                    Text(PassZonText.tid(d.seconds))
-                        .font(.subheadline)
-                        .monospacedDigit()
-                }
-            }
-        }
-    }
 }
 
 /// BESLUT B124. Sidan Nu: tiden, pulsen stort, zonen som färg och ord, och för ett pass ute sträcka och tempo.
@@ -152,7 +116,27 @@ struct PassOversiktSida: View {
             if delar.isEmpty {
                 Text("Ingen puls än.").font(.footnote).foregroundStyle(.secondary)
             } else {
-                ZonRader(zoner: delar)
+                let längst: TimeInterval = max(1, delar.map { (d: PassZones.Share) -> TimeInterval in d.seconds }.max() ?? 1)
+                VStack(spacing: 8) {
+                    ForEach(delar, id: \.zone) { (d: PassZones.Share) in
+                        HStack(spacing: 8) {
+                            Circle().fill(PassZonFarg.color(d.zone)).frame(width: 10, height: 10)
+                            Text(PassZonText.namn(d.zone))
+                                .font(.subheadline)
+                                .frame(width: 96, alignment: .leading)
+                            GeometryReader { (g: GeometryProxy) in
+                                Capsule()
+                                    .fill(PassZonFarg.color(d.zone))
+                                    .frame(width: max(4, g.size.width * CGFloat(d.seconds / längst)), height: 8)
+                                    .frame(maxHeight: .infinity, alignment: .center)
+                            }
+                            .frame(height: 12)
+                            Text(PassFormat.clock(d.seconds))
+                                .font(.subheadline)
+                                .monospacedDigit()
+                        }
+                    }
+                }
             }
         } else {
             Text("Pulszonerna visas när maxpulsen är känd.")

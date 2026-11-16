@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import Band
 import Fitness
+import Journal
 import Night
 import Sound
 import WhoopFrames
@@ -23,6 +24,8 @@ struct DataView: View {
     @ObservedObject private var facit = SoundFacitStore.shared
     /// BESLUT B106. Profilen, Whoops avskrivna tal och skattningen av VO2 max.
     @ObservedObject private var kondition = KonditionModell.shared
+    /// BESLUT B127. Dagboken: kvällens taggar och morgonens skattning.
+    @ObservedObject private var dagbok = DagbokModell.shared
     @State private var importing = false
     /// PLAN.md A3. Reglaget "Whoop-appen är borta": av som förval.
     @AppStorage(Recorder.utanWhoopKey) private var utanWhoop = false
@@ -43,7 +46,10 @@ struct DataView: View {
             utanWhoop: $utanWhoop,
             onUtanWhoop: { (på: Bool) -> Void in if på { recorder.considerAutoFetch(force: true) } },
             kondition: kondition.lager, skattning: kondition.skattning,
-            onWhoopTal: { (dag: Int, värde: Double) -> Void in kondition.skrivAv(dag: dag, värde: värde) }
+            onWhoopTal: { (dag: Int, värde: Double) -> Void in kondition.skrivAv(dag: dag, värde: värde) },
+            dagbok: dagbok.låst ? nil : dagbok.dagbok,
+            onKväll: { dagbok.öppnaKväll() },
+            onMorgon: { dagbok.öppnaMorgon() }
         )
         .onAppear { recorder.refresh() }
         .fileImporter(
@@ -112,6 +118,10 @@ struct DataScreen: View {
     var kondition: FitnessStore?
     var skattning: PassiveFitness.Outcome?
     var onWhoopTal: (Int, Double) -> Void = { _, _ in }
+    /// BESLUT B127 · METOD M73. Dagboken och vägen till kvällens blad och morgonens fråga. `nil` (förval) döljer sektionen.
+    var dagbok: Journal?
+    var onKväll: () -> Void = {}
+    var onMorgon: () -> Void = {}
 
     /// METOD M28. Nätterna ur K18, för kontrollen.
     private var k18Nights: [NightSummary] {
@@ -129,6 +139,11 @@ struct DataScreen: View {
             if let kondition {
                 KonditionSektion(lager: kondition, skattning: skattning, idag: now ?? Date(),
                                  onWhoopTal: onWhoopTal)
+            }
+
+            // BESLUT B127. Dagboken: hur mycket som är loggat, och vägen till att ändra ett svar.
+            if let dagbok {
+                DagbokSektion(dagbok: dagbok, onKväll: onKväll, onMorgon: onMorgon)
             }
 
             Section {

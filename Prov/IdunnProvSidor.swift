@@ -8,7 +8,6 @@
 import XCTest
 import SwiftUI
 import UIKit
-import Fitness
 import Pass
 import SleepNeed
 @testable import Idunn
@@ -70,8 +69,7 @@ final class IdunnProvSidor: XCTestCase {
         try fånga(sida(PassKartSida(pass: ute, maxpuls: maxPuls)), namn: "pass-karta", höjd: 800)
         try fånga(sida(PassNuSida(pass: inne, now: nu, maxpuls: maxPuls)), namn: "pass-nu-inne", höjd: 900)
         try fånga(sida(PassOversiktSida(pass: inne, now: nu, maxpuls: maxPuls)), namn: "pass-oversikt-inne", höjd: 900)
-        let medMaxpuls: PassKondition = PassKondition(maxpuls: MaxPulse(bpm: maxPuls, source: .own))
-        try fånga(PassScreen(phase: .running, pass: ute, now: nu, saved: [], kondition: medMaxpuls), namn: "pass-sidor", höjd: 900)
+        try fånga(PassScreen(phase: .running, pass: ute, now: nu, saved: []), namn: "pass-sidor", höjd: 900)
     }
 
     // MARK: Ritverktyget

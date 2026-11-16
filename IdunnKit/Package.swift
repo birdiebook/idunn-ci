@@ -18,6 +18,7 @@ let package = Package(
         .library(name: "Fitness", targets: ["Fitness"]),
         .library(name: "Markers", targets: ["Markers"]),
         .library(name: "Band", targets: ["Band"]),
+        .library(name: "Journal", targets: ["Journal"]),
         .library(name: "DemoData", targets: ["DemoData"]),
     ],
     targets: [
@@ -80,5 +81,9 @@ let package = Package(
         // ladda (vid 20, 10 och 5 %, en gång per gräns och urladdning). Bara Foundation och inga andra mål.
         .target(name: "Band"),
         .testTarget(name: "BandTests", dependencies: ["Band"]),
+        // Dagboken (PLAN.md spåret U, BESLUT B127, METOD M73): kvällens taggar och morgonens skattning, filen
+        // `dagbok.json`, och när appen frågar. Bara Foundation och inga andra mål; vyerna ligger i appen.
+        .target(name: "Journal"),
+        .testTarget(name: "JournalTests", dependencies: ["Journal"]),
     ]
 )
