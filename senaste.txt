@@ -1,20 +1,20 @@
-4c74dabe6a57e4e14c465e2eaee25093cce2ceb5 spegel 2026-11-16T09:42:38Z run 43841579011
+e2ab689da3fab2ca30b0c754d9d8e21ce55991dc spegel 2026-11-16T09:58:49Z run 43844037551
 == swift-release
-GRÖNT: 1005 test, 0 fel, 58 s i testerna, bygget 141 s
-Långsammast (av 1005):
-      5.9 s  DemoDataTests.testIdunnsHudtempLiggerUnderWhoopsOchSaknasPåNätterUnderMinstaTäckning
+GRÖNT: 1002 test, 0 fel, 62 s i testerna, bygget 127 s
+Långsammast (av 1002):
+      5.6 s  DemoDataTests.testIdunnsHudtempLiggerUnderWhoopsOchSaknasPåNätterUnderMinstaTäckning
       2.4 s  NightSoundTests.testNattenLäserSittLjudNärDenRäknasOchSammanfattningenBärDet
       2.2 s  K18DaysTests.testEnAnnanNattIFilernaPåverkarInteDennaNatt
       2.1 s  SleepEditTests.testComputeDueRäknarDenÄndradeNattenOchÅterställer
+      2.1 s  K18InspelningarTests.testEnSekundIBådeInspelningOchDygnRäknasEnGång
       2.0 s  K18DaysTests.testEttNyttByggeRäknarOmEnNattUrArkivetMedDetNyaRäknesättet
-      2.0 s  K18InspelningarTests.testEnSekundIBådeInspelningOchDygnRäknasEnGång
-      2.0 s  K18DaysTests.testEttDygnSomArkivOchEttSomRådygnGerSammaNatt
+      1.9 s  K18DaysTests.testEttDygnSomArkivOchEttSomRådygnGerSammaNatt
       1.9 s  NattvalVaktTests.testEnNattUtanDygnetEfterSaknarInteLager
       1.8 s  K18DaysTests.testNattenUrArkivenÄrSammaNattSomUrDygnsfilerna
       1.5 s  NightSoundTests.testAnalysenLämnarSammanfattningenFörExportenTillAppen
       1.2 s  PahittatBandTests.testHämtningDagenEfterFinnsMedNärNattenSattSig
-      1.2 s  NattvalVaktTests.testEnK18NattVarsFilerInteGårAttLäsaSaknarLager
-      1.2 s  NattvalVaktTests.testEnNattMedK18GerLagerOchVäljsFöreInspelningen
       1.2 s  NattvalVaktTests.testEnK18NattSomBandetHördeFörLiteVikerSigFörInspelningenSomLågPåHelaNatten
-      1.1 s  PahittatBandTests.testWhoopAppenSynkarSamtidigtIdunnStopparOchFårÄndåHelaNatten
+      1.2 s  NattvalVaktTests.testEnNattMedK18GerLagerOchVäljsFöreInspelningen
+      1.2 s  NattvalVaktTests.testEnK18NattVarsFilerInteGårAttLäsaSaknarLager
+      1.2 s  PahittatBandTests.testEnHelNattHämtasPåMorgonenOchBlirSammaNattSomFacit
 
