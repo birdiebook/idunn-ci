@@ -143,30 +143,6 @@ final class IdunnProvD2: XCTestCase {
         XCTAssertNotNil(paket.sound, "den senaste natten har ljud")
         let finnsKlipp: (NightSound.Clip) -> Bool = { (_: NightSound.Clip) -> Bool in true }
 
-        // BESLUT B129 · METOD M75. Nattens två halvor under Nattens HRV: ur demonätterna som appen räknar dem
-        // (`matt-hrv-halvor`), och med påhittade halvor där natten börjar lågt och kvällen har taggar
-        // (`matt-hrv-lag-borjan`).
-        let halvor = Natthalvor(d.summaries)
-        XCTAssertNotNil(halvor.första[dag], "den senaste natten har en första halva")
-        XCTAssertNotNil(halvor.andra[dag], "den senaste natten har en andra halva")
-        try rendera(NightMetricStack(metric: .hrv, summary: natt, bundle: paket, typical: typisk, values: v, halvor: halvor),
-                    namn: "matt-hrv-halvor")
-        var första: [WakeDay: Double] = [:]
-        var andra: [WakeDay: Double] = [:]
-        for i in 1...35 {
-            let före = WakeDay(daysSince1970: dag.daysSince1970 - i)
-            första[före] = 50 + Double(i % 5)
-            andra[före] = 62 + Double(i % 4)
-        }
-        första[dag] = 33
-        andra[dag] = 64
-        let lågBörjan = Natthalvor(första: första, andra: andra)
-        XCTAssertEqual(lågBörjan.text(dag: dag, taggar: ["styrkepass", "sen måltid"]),
-                       "Låg i början av natten, återhämtad mot morgonen. Kvällen före: styrkepass, sen måltid.")
-        try rendera(NightMetricStack(metric: .hrv, summary: natt, bundle: paket, typical: typisk, values: v,
-                                     halvor: lågBörjan, taggar: ["styrkepass", "sen måltid"]),
-                    namn: "matt-hrv-lag-borjan")
-
         let namn: [NightMetric: String] = [.hrv: "hrv", .temp: "hudtemp", .resp: "andning", .move: "rorelse", .ljud: "ljud"]
         for m in NightMetric.allCases {
             let n: String = namn[m] ?? m.rawValue
