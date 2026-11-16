@@ -145,21 +145,29 @@ struct PassScreen: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    switch phase {
-                    case .idle, .done:
-                        restView
-                    case .running:
-                        if let p = pass {
-                            if p.isStepTest { steptestPågår(p) } else { runningView(p) }
+            Group {
+                // BESLUT B124. Medan ett pass pågår tar sidorna hela höjden; Stopp ligger fast under dem.
+                if phase == .running, let p = pass {
+                    PassPågårSidor(pass: p, now: now,
+                                   maxpuls: kondition.maxpuls?.bpm ?? PassLoad.maxPulse(from: saved),
+                                   nu: p.isStepTest ? AnyView(steptestNu(p)) : nil,
+                                   stopp: actions.stop)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            switch phase {
+                            case .idle, .done:
+                                restView
+                            case .running:
+                                EmptyView()
+                            case .after:
+                                if let p = pass { afterView(p) }
+                            }
                         }
-                    case .after:
-                        if let p = pass { afterView(p) }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
             }
             .navigationTitle("Pass")
             .navigationBarTitleDisplayMode(.inline)
@@ -298,41 +306,13 @@ struct PassScreen: View {
 
     // MARK: Pågår
 
-    private func runningView(_ p: Pass) -> some View {
-        VStack(spacing: 16) {
-            Text(PassFormat.clock(now.timeIntervalSince(p.start)))
-                .font(.system(size: 44, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-            bigPulse(p)
-            silentRow(p)
-            // BESLUT B107 · BESLUT B110 · BESLUT B111. Ett pass ute visar sträcka och tempo i ett kort, och inte lägst,
-            // snitt och högst (de väntar till efteråt). Ett pass inne visar kurvan och de tre talen.
-            if p.isOutdoor {
-                PassUteStats(pass: p, seconds: now.timeIntervalSince(p.start)).kort(16)
-                PassChart(pass: p, now: now)
-                    .frame(height: 200)
-            } else {
-                PassChart(pass: p, now: now)
-                    .frame(height: 200)
-                PassStats(pass: p)
-            }
-            Button(action: actions.stop) {
-                Label("Stopp", systemImage: "stop.fill")
-                    .font(.title2.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 56)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Tema.red)
-        }
-    }
-
     /// Orden i takten: två steg upp och två ner, i takt med klicket.
     private static let takt: [String] = ["upp", "upp", "ner", "ner"]
 
     /// BESLUT B111 · METOD M62. Medan steptestet pågår: fem streck för nivåerna, nivån och tiden till nästa, den stora
     /// pulsen, gränsen där testet stannar, ett kort med takten (ordet som gäller just nu markerat, i takt med
-    /// metronomen), kurvan och Stopp. Inga andra siffror.
-    private func steptestPågår(_ p: Pass) -> some View {
+    /// metronomen). Kurvan ligger på sidan Översikt och Stopp under sidorna (BESLUT B124).
+    private func steptestNu(_ p: Pass) -> some View {
         let sek: TimeInterval = now.timeIntervalSince(p.start)
         let sista: Int = StepTest.cadences.count - 1
         let nivå: Int = min(StepTest.level(at: sek) ?? sista, sista)
@@ -364,15 +344,6 @@ struct PassScreen: View {
                     .foregroundStyle(Tema.dim)
             }
             taktkort(nivå)
-            PassChart(pass: p, now: now)
-                .frame(height: 130)
-            Button(action: actions.stop) {
-                Label("Stopp", systemImage: "stop.fill")
-                    .font(.title2.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 56)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Tema.red)
         }
     }
 
@@ -664,7 +635,7 @@ private struct PassShareSheet: UIViewControllerRepresentable {
 // MARK: - Kurvan och talen
 
 /// Lägsta, snitt och högsta under den aktiva delen (METOD M47), som stora tal.
-private struct PassStats: View {
+struct PassStats: View {
     let pass: Pass
 
     var body: some View {
