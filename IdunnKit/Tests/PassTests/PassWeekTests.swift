@@ -86,7 +86,8 @@ final class PassWeekTests: XCTestCase {
         XCTAssertEqual(ö.current.weekStart, måndag)
         XCTAssertEqual(ö.current.seconds, 45 * 60)
         XCTAssertEqual(ö.previous.map { $0.weekStart }, [måndag - 28, måndag - 21, måndag - 14, måndag - 7])
-        XCTAssertEqual(ö.previous.map { $0.seconds }, [60 * 60, 0, 120 * 60, 60 * 60])
+        let tider: [TimeInterval] = [3600, 0, 7200, 3600]
+        XCTAssertEqual(ö.previous.map { (v: PassWeek.Summary) -> TimeInterval in v.seconds }, tider)
         XCTAssertEqual(ö.averageSeconds, 60 * 60)                      // tomma veckan räknas med
         XCTAssertEqual(ö.averageLoad, 60)
         XCTAssertEqual(ö.averageMeters, 0)
