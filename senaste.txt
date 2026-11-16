@@ -1,20 +1,11 @@
-58b055d8158fac79d92fb82549db5ff791345110 spegel 2026-11-16T06:58:55Z run 43820052392
+ffc8452a950178be86c53ed4d9e7b2033903c6c1 spegel 2026-11-16T08:25:26Z run 43830938392
 == swift-release
-GRÖNT: 979 test, 0 fel, 61 s i testerna, bygget 141 s
-Långsammast (av 979):
-      5.9 s  DemoDataTests.testIdunnsHudtempLiggerUnderWhoopsOchSaknasPåNätterUnderMinstaTäckning
-      2.4 s  NightSoundTests.testNattenLäserSittLjudNärDenRäknasOchSammanfattningenBärDet
-      2.2 s  K18DaysTests.testEnAnnanNattIFilernaPåverkarInteDennaNatt
-      2.1 s  SleepEditTests.testComputeDueRäknarDenÄndradeNattenOchÅterställer
-      2.0 s  K18DaysTests.testEttNyttByggeRäknarOmEnNattUrArkivetMedDetNyaRäknesättet
-      2.0 s  K18InspelningarTests.testEnSekundIBådeInspelningOchDygnRäknasEnGång
-      2.0 s  K18DaysTests.testEttDygnSomArkivOchEttSomRådygnGerSammaNatt
-      1.9 s  NattvalVaktTests.testEnNattUtanDygnetEfterSaknarInteLager
-      1.8 s  K18DaysTests.testNattenUrArkivenÄrSammaNattSomUrDygnsfilerna
-      1.5 s  NightSoundTests.testAnalysenLämnarSammanfattningenFörExportenTillAppen
-      1.2 s  PahittatBandTests.testHämtningDagenEfterFinnsMedNärNattenSattSig
-      1.2 s  NattvalVaktTests.testEnK18NattVarsFilerInteGårAttLäsaSaknarLager
-      1.2 s  NattvalVaktTests.testEnNattMedK18GerLagerOchVäljsFöreInspelningen
-      1.2 s  NattvalVaktTests.testEnK18NattSomBandetHördeFörLiteVikerSigFörInspelningenSomLågPåHelaNatten
-      1.1 s  PahittatBandTests.testWhoopAppenSynkarSamtidigtIdunnStopparOchFårÄndåHelaNatten
+RÖTT: ingen sammanräkning i loggen (kompilerade det?)
+/__w/idunn-ci/idunn-ci/IdunnKit/Tests/PassTests/PassWeekTests.swift:89:60: error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+|                                                           `- error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+/__w/idunn-ci/idunn-ci/IdunnKit/Tests/PassTests/PassWeekTests.swift:89:73: error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+|                                                                        `- error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+/__w/idunn-ci/idunn-ci/IdunnKit/Tests/PassTests/PassWeekTests.swift:89:82: error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+|                                                                                 `- error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+error: fatalError
 

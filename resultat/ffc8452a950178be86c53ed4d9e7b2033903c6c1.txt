@@ -1,0 +1,11 @@
+ffc8452a950178be86c53ed4d9e7b2033903c6c1 spegel 2026-11-16T08:25:26Z run 43830938392
+== swift-release
+RÖTT: ingen sammanräkning i loggen (kompilerade det?)
+/__w/idunn-ci/idunn-ci/IdunnKit/Tests/PassTests/PassWeekTests.swift:89:60: error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+|                                                           `- error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+/__w/idunn-ci/idunn-ci/IdunnKit/Tests/PassTests/PassWeekTests.swift:89:73: error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+|                                                                        `- error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+/__w/idunn-ci/idunn-ci/IdunnKit/Tests/PassTests/PassWeekTests.swift:89:82: error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+|                                                                                 `- error: cannot convert value of type 'Int' to expected element type 'TimeInterval' (aka 'Double')
+error: fatalError
+
