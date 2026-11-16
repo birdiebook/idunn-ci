@@ -19,7 +19,6 @@ let package = Package(
         .library(name: "Markers", targets: ["Markers"]),
         .library(name: "Band", targets: ["Band"]),
         .library(name: "Coach", targets: ["Coach"]),
-        .library(name: "Journal", targets: ["Journal"]),
         .library(name: "DemoData", targets: ["DemoData"]),
     ],
     targets: [
@@ -88,9 +87,5 @@ let package = Package(
         // skickade. Bara Foundation och inget nätverk: sändaren ligger i appen (App/CoachSandare.swift).
         .target(name: "Coach", dependencies: ["Night", "Pass", "SleepNeed", "Markers", "Fitness"]),
         .testTarget(name: "CoachTests", dependencies: ["Coach", "Night", "Pass", "SleepNeed", "Markers", "Fitness"]),
-        // Dagboken (PLAN.md spåret U, BESLUT B130, METOD M75): kvällens taggar och morgonens skattning, filen
-        // `dagbok.json`, och när appen frågar. Bara Foundation och inga andra mål; vyerna ligger i appen.
-        .target(name: "Journal"),
-        .testTarget(name: "JournalTests", dependencies: ["Journal"]),
     ]
 )

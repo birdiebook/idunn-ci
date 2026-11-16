@@ -45,10 +45,10 @@ jobs:
           CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
         run: |
           for n in APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_PRIVATE_KEY CERTIFICATE_PRIVATE_KEY; do
-            if [ -z "${!n}" ]; then echo "FEL: hemligheten $n saknas i spegelns Actions-hemligheter." >&2; exit 1; fi
+            if [ -z "${!n}" ]; then echo "FEL: hemligheten $n saknas i spegelns Actions-hemligheter." | tee /tmp/orsak.txt >&2; exit 1; fi
           done
           if ! printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | grep -q "BEGIN PRIVATE KEY"; then
-            echo "FEL: APP_STORE_CONNECT_PRIVATE_KEY är inte hela .p8-filen (med raderna BEGIN och END)." >&2; exit 1
+            echo "FEL: APP_STORE_CONNECT_PRIVATE_KEY är inte hela .p8-filen (med raderna BEGIN och END)." | tee /tmp/orsak.txt >&2; exit 1
           fi
 
       - name: Testerna och appens bygge är gröna för det som byggs
@@ -162,6 +162,8 @@ jobs:
               echo "GRÖNT: bygge ${BYGGNUMMER:-?} uppladdat till TestFlight"
             else
               echo "RÖTT: bygget nådde inte TestFlight (se körningen ${GITHUB_RUN_ID})"
+              # Orsaken när den är känd (en saknad hemlighets namn, aldrig ett värde).
+              cat /tmp/orsak.txt 2>/dev/null || true
             fi
           } > /tmp/resultat.txt
           cat /tmp/resultat.txt

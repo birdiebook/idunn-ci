@@ -191,9 +191,6 @@ struct NightSummary: Codable, Identifiable, Equatable, Sendable {
     /// METOD M4 · BESLUT B13
     var rmssdMean: Double?
     var rmssdWhoopLike: Double?
-    /// METOD M76 · BESLUT B131. Nattens första och andra halva; bara nätter ur K18, och `nil` i äldre sammanfattningar.
-    var rmssdEarly: Double?
-    var rmssdLate: Double?
     /// METOD M5
     var restingHeartRate: Double?
     /// METOD M10
@@ -319,8 +316,6 @@ struct NightSummary: Codable, Identifiable, Equatable, Sendable {
         gapFraction = d.coverage.map { (c: Double) -> Double in 1 - c }
         rmssdMean = d.rmssdMean
         rmssdWhoopLike = d.rmssdWhoopLike
-        rmssdEarly = d.rmssdEarly
-        rmssdLate = d.rmssdLate
         restingHeartRate = d.restingHeartRate
         breathsPerMinute = d.breathsPerMinute
         validWindows = d.validWindows
