@@ -164,7 +164,8 @@ struct PassOversiktSida: View {
     @ViewBuilder
     private var ute: some View {
         let spår: [TrackPoint] = pass.track ?? []
-        let tempo: Double? = PassRoute.pace(distance: PassRoute.distance(spår), seconds: now.timeIntervalSince(pass.start))
+        // BESLUT B132 · METOD M77. Tempot i rörelse: stillastående räknas inte in.
+        let tempo: Double? = PassTerrain.movement(spår).pace
         let tider: [PassRoute.Split] = PassRoute.splits(spår)
         VStack(spacing: 0) {
             HStack {

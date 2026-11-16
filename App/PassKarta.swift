@@ -18,6 +18,11 @@ enum PassRuttFormat {
         return minutes(s)
     }
 
+    /// BESLUT B132 · METOD M77. Stigningen i hela meter: "85 m".
+    static func höjdmeter(_ meter: Double) -> String {
+        "\(Int(max(0, meter).rounded())) m"
+    }
+
     /// `m:ss`, för tempot och kilometertiderna.
     static func minutes(_ seconds: Double) -> String {
         let s: Int = max(0, Int(seconds.rounded()))
@@ -134,12 +139,26 @@ struct PassKarta: View {
         let användbara: [TrackPoint] = PassRoute.usable(spår)
         let meter: Double = PassRoute.distance(spår)
         let tider: [PassRoute.Split] = PassRoute.splits(spår)
+        // BESLUT B132 · METOD M77. Tempot räknas på tiden i rörelse, och stigningen ur spårets höjder.
+        let rörelse: PassTerrain.Movement = PassTerrain.movement(spår)
+        let stigning: PassTerrain.Climb? = PassTerrain.climb(spår)
         VStack(spacing: 16) {
             karta(användbara)
             HStack(spacing: 0) {
                 stort("sträcka", PassRuttFormat.km(meter))
                 stort("tid", PassFormat.short(pass.duration))
-                stort("tempo per km", PassRuttFormat.pace(PassRoute.pace(distance: meter, seconds: pass.duration)))
+                stort("tempo per km", PassRuttFormat.pace(rörelse.pace))
+            }
+            if stigning != nil || rörelse.pausedSeconds > 0 {
+                VStack(spacing: 0) {
+                    if let s = stigning {
+                        detalj("Stigning", PassRuttFormat.höjdmeter(s.ascent))
+                    }
+                    if rörelse.pausedSeconds > 0 {
+                        detalj("I rörelse", PassRuttFormat.minutes(rörelse.movingSeconds))
+                        detalj("Paus", PassRuttFormat.minutes(rörelse.pausedSeconds))
+                    }
+                }
             }
             förklaring
             if !tider.isEmpty {
@@ -176,6 +195,19 @@ struct PassKarta: View {
         .frame(height: 260)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .accessibilityLabel("Karta över rutten")
+    }
+
+    /// BESLUT B132. En rad med namn och värde, som kilometertiderna.
+    private func detalj(_ namn: String, _ värde: String) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(namn).foregroundStyle(.secondary)
+                Spacer()
+                Text(värde).monospacedDigit().fontWeight(.semibold)
+            }
+            .padding(.vertical, 6)
+            Divider()
+        }
     }
 
     private func stort(_ namn: String, _ värde: String) -> some View {
