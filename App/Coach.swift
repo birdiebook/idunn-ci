@@ -18,7 +18,7 @@ import SleepNeed
 /// - **När:** en stund efter att något ändrats (en natt räknad, ett pass sparat, en mätning inskriven) och när appen
 ///   öppnas. Bara det som är nytt eller ändrat skickas (`CoachLedger`). Vyerna ska ha matat modellerna först
 ///   (`vyernaMatade`): en app som iOS väckt i bakgrunden utan skärm har inga huvudtal, och skulle annars skicka
-///   nätterna utan dem.
+///   nätterna utan dem. Modellen gör därför ingenting förrän skärmen funnits en gång.
 /// - **Vart:** värden i kopplingen som användaren klistrat in, över TLS, genom `CoachSändare`.
 /// - **Av:** reglaget på Data stänger av sändningen; "Koppla från" tar bort kopplingen ur nyckelringen.
 final class CoachModell: ObservableObject {
@@ -58,8 +58,11 @@ final class CoachModell: ObservableObject {
 
     // MARK: Start
 
-    /// Körs en gång när appen startar. Inte i provet (IdunnProv körs inuti appen): där skickas ingenting.
-    func starta() {
+    /// Körs en gång, första gången vyerna matat modellerna. Inte vid appens start: iOS kan väcka appen för bandet
+    /// innan telefonen låsts upp efter en omstart, och då är filerna låsta. Modellerna den lyssnar på (passen,
+    /// profilen, konditionen) ska inte skapas då; de läser sina filer när de skapas. Inte heller i provet
+    /// (IdunnProv körs inuti appen): där skickas ingenting.
+    private func starta() {
         guard !startad, ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         startad = true
         config = CoachNyckelring.läs()
@@ -90,9 +93,11 @@ final class CoachModell: ObservableObject {
             .store(in: &prenumerationer)
     }
 
-    /// Vyerna har gett modellerna nätterna (`ContentView`): huvudtalen finns, så nätterna får skickas.
+    /// Vyerna har gett modellerna nätterna (`ContentView`): huvudtalen finns, så nätterna får skickas. Första gången
+    /// läses kopplingen och loggen, och modellen börjar lyssna på ändringar.
     func vyernaMatade() {
-        matad = true
+        starta()
+        matad = startad
     }
 
     // MARK: Det som skickas
