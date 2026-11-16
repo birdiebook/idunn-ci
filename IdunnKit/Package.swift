@@ -18,7 +18,7 @@ let package = Package(
         .library(name: "Fitness", targets: ["Fitness"]),
         .library(name: "Markers", targets: ["Markers"]),
         .library(name: "Band", targets: ["Band"]),
-        .library(name: "Journal", targets: ["Journal"]),
+        .library(name: "Coach", targets: ["Coach"]),
         .library(name: "DemoData", targets: ["DemoData"]),
     ],
     targets: [
@@ -81,9 +81,11 @@ let package = Package(
         // ladda (vid 20, 10 och 5 %, en gång per gräns och urladdning). Bara Foundation och inga andra mål.
         .target(name: "Band"),
         .testTarget(name: "BandTests", dependencies: ["Band"]),
-        // Dagboken (PLAN.md spåret U, BESLUT B128, METOD M74): kvällens taggar och morgonens skattning, filen
-        // `dagbok.json`, och när appen frågar. Bara Foundation och inga andra mål; vyerna ligger i appen.
-        .target(name: "Journal"),
-        .testTarget(name: "JournalTests", dependencies: ["Journal"]),
+        // Coachen (PLAN.md spåret C, BESLUT B127, METOD M73): det Idunn skickar av sig själv till användaren egen databas,
+        // så att Claude kan läsa det. Bara sammanfattningar: en natt, ett pass, en inskriven mätning och profilen som
+        // dokument utan fält för slag, pulsprov, positioner eller ljud; kopplingen, anropet, svaret och loggen över det
+        // skickade. Bara Foundation och inget nätverk: sändaren ligger i appen (App/CoachSandare.swift).
+        .target(name: "Coach", dependencies: ["Night", "Pass", "SleepNeed", "Markers", "Fitness"]),
+        .testTarget(name: "CoachTests", dependencies: ["Coach", "Night", "Pass", "SleepNeed", "Markers", "Fitness"]),
     ]
 )

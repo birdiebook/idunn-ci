@@ -10,6 +10,8 @@ struct IdunnApp: App {
         // bakgrunden för bandet (state restoration) måste centralen finnas direkt.
         // BESLUT B123. Påminnelsen om att ladda bandet lyssnar på batteriet från start, också i bakgrunden.
         Batteripåminnelse.shared.starta(recorder: Recorder.shared)
+        // BESLUT B127. Coachen: skickar sammanfattningarna av sig själv när telefonen är kopplad (App/Coach.swift).
+        CoachModell.shared.starta()
     }
 
     var body: some Scene {

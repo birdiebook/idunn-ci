@@ -25,10 +25,6 @@ public struct NightDigest: Codable, Equatable, Sendable {
     /// METOD M4 · BESLUT B13. Nattens medel, och den Whoop-lika kandidaten.
     public var rmssdMean: Double?
     public var rmssdWhoopLike: Double?
-    /// METOD M75 · BESLUT B129. Nattens första och andra halva (`NightHalves`); `nil` för en halva med för få fönster.
-    /// Äldre sparade sammanfattningar saknar fälten och avkodas ändå.
-    public var rmssdEarly: Double?
-    public var rmssdLate: Double?
     /// METOD M5
     public var restingHeartRate: Double?
     /// BESLUT B34. Medelpulsen över sömnperioden; bara för en natt med sömnperiod (ur K18).
@@ -94,9 +90,6 @@ public struct NightDigest: Codable, Equatable, Sendable {
         pulseSeconds = r.pulse.reduce(0) { (sum: Int, m: PulseMinute) -> Int in sum + m.seconds }
         rmssdMean = r.analysis.rmssd.mean
         rmssdWhoopLike = r.analysis.rmssd.whoopLike
-        let halvor: NightHalves.Halves = NightHalves.compute(r)
-        rmssdEarly = halvor.early
-        rmssdLate = halvor.late
         restingHeartRate = r.analysis.restingHeartRate
         meanHeartRate = r.sleep != nil ? r.analysis.meanHeartRate : nil
         lightMinutes = r.stages?.minutes(.light)
