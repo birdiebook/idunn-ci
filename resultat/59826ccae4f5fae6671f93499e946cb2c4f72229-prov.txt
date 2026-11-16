@@ -1,0 +1,232 @@
+59826ccae4f5fae6671f93499e946cb2c4f72229 spegel 2026-11-16T09:11:41Z run 43835739757
+== prov (xcodebuild test, IdunnProv, simulator)
+GRÖNT: provet gick, 169 bilder
+PROV: 30 gamla och 10 K18-nätter för landskapet på 18 s
+PROV: 40 gamla och 14 K18-nätter räknade på 26 s
+PROV: appens väg: 40 gamla och 2 K18-nätter ur filer på 34 s
+PROV: baslinjen byggs 4 av 7
+PROV: dagbokens fil gick fram och tillbaka (1 kväll, 1 morgon)
+PROV: första natten sömnpoäng 83, ingen återhämtning
+PROV: grundbehov med exportens tal 8:24 ± 13 min
+PROV: läggdags 18:51 vanlig, 20:45 med upp 06:30 (full sömn 18:51 och 20:45)
+PROV: ljud kända klasser (303): accordion,acoustic_guitar,air_conditioner,air_horn,aircraft,airplane,alarm_clock,ambulance_siren,applause,artillery_fire,babble,baby_crying,baby_laughter,bagpipes,banjo,basketball_bounce,bass_drum,bass_guitar,bassoon,bathtub_filling_washing,battle_cry,bee_buzz,beep,bell,belly_laugh,bicycle,bicycle_bell,bird,bird_chirp_tweet,bird_flapping,bird_squawk,bird_vocalization,biting,blender,boat_water_vehicle,boiling,booing,boom,bowed_string_instrument,bowling_impact,brass_instrument,breathing,burp,bus,camera,car_horn,car_passing_by,cat,cat_meow,cat_purr,cello,chainsaw,chatter,cheering,chewing,chicken,chicken_cluck,children_shouting,chime,choir_singing,chopping_food,chopping_wood,chuckle_chortle,church_bell,civil_defense_siren,clapping,clarinet,click,clock,coin_dropping,cough,cow_moo,cowbell,coyote_howl,cricket_chirp,crow_caw,crowd,crumpling_crinkling,crushing,crying_sobbing,cutlery_silverware,cymbal,didgeridoo,disc_scratching,dishes_pots_pans,dog,dog_bark,dog_bow_wow,dog_growl,dog_howl,dog_whimper,door,door_bell,door_slam,door_sliding,double_bass,drawer_open_close,drill,drum,drum_kit,duck_quack,electric_guitar,electric_piano,electric_shaver,electronic_organ,elk_bugle,emergency_vehicle,engine,engine_accelerating_revving,engine_idling,engine_knocking,engine_starting,eruption,finger_snapping,fire,fire_crackle,fire_engine_siren,firecracker,fireworks,flute,fly_buzz,foghorn,fowl,french_horn,frog,frog_croak,frying_food,gargling,gasp,giggling,glass_breaking,glass_clink,glockenspiel,gong,goose_honk,guitar,guitar_strum,guitar_tapping,gunshot_gunfire,gurgling,hair_dryer,hammer,hammond_organ,harmonica,harp,harpsichord,hedge_trimmer,helicopter,hi_hat,hiccup,horse_clip_clop,horse_neigh,humming,insect,keyboard_musical,keys_jangling,knock,laughter,lawn_mower,lion_roar,liquid_dripping,liquid_filling_container,liquid_pouring,liquid_sloshing,liquid_splashing,liquid_spraying,liquid_squishing,liquid_trickle_dribble,mallet_percussion,mandolin,marimba_xylophone,mechanical_fan,microwave_oven,mosquito_buzz,motorboat_speedboat,motorcycle,music,nose_blowing,oboe,ocean,orchestra,organ,owl_hoot,percussion,person_running,person_shuffling,person_walking,piano,pig_oink,pigeon_dove_coo,playing_badminton,playing_hockey,playing_squash,playing_table_tennis,playing_tennis,playing_volleyball,plucked_string_instrument,police_siren,power_tool,power_windows,printer,race_car,rail_transport,railroad_car,rain,raindrop,rapping,ratchet_and_pawl,rattle_instrument,reverse_beeps,ringtone,rooster_crow,rope_skipping,rowboat_canoe_kayak,sailing,saw,saxophone,scissors,screaming,scuba_diving,sea_waves,sewing_machine,sheep_bleat,shofar,shout,sigh,silence,singing,singing_bowl,sink_filling_washing,siren,sitar,skateboard,skiing,slap_smack,slurp,smoke_detector,snake_hiss,snake_rattle,snare_drum,sneeze,snicker,snoring,speech,squeak,steel_guitar_slide_guitar,steelpan,stream_burbling,subway_metro,synthesizer,tabla,tambourine,tap,tearing,telephone,telephone_bell_ringing,theremin,thump_thud,thunder,thunderstorm,tick,tick_tock,timpani,toilet_flush,toothbrush,traffic_noise,train,train_horn,train_wheels_squealing,train_whistle,trombone,truck,trumpet,tuning_fork,turkey_gobble,typewriter,typing,typing_computer_keyboard,ukulele,underwater_bubbling,vacuum_cleaner,vehicle_skidding,vibraphone,violin_fiddle,water,water_pump,water_tap_faucet,waterfall,whale_vocalization,whispering,whistling,whoosh_swoosh_swish,wind,wind_chime,wind_instrument,wind_noise_microphone,wind_rustling_leaves,wood_cracking,writing,yell,yodeling,zipper,zither
+PROV: ljud klipp 00040.m4a: 144000 prov, 61143 byte
+PROV: ljud körd på 1 s: 55 sekunder, 1 händelser, 1 klipp, klassning ja
+PROV: ljud ok
+PROV: ljud saknas i klassificeraren (0): 
+PROV: ljud ur filer: 20 händelser, 1 väckte, snarkning – min/h
+PROV: ljud utanför tabellen, räknas som övrigt (228): accordion,acoustic_guitar,air_conditioner,aircraft,applause,artillery_fire,babble,bagpipes,banjo,basketball_bounce,bass_drum,bass_guitar,bassoon,bathtub_filling_washing,battle_cry,bee_buzz,bell,belly_laugh,bicycle,bicycle_bell,bird_flapping,bird_vocalization,biting,blender,boat_water_vehicle,boiling,booing,boom,bowed_string_instrument,bowling_impact,brass_instrument,burp,camera,cello,chainsaw,chatter,cheering,chewing,chicken,chicken_cluck,children_shouting,chime,choir_singing,chopping_food,chopping_wood,chuckle_chortle,church_bell,clapping,clarinet,click,clock,coin_dropping,cow_moo,cowbell,coyote_howl,cricket_chirp,crow_caw,crowd,crumpling_crinkling,crushing,cutlery_silverware,cymbal,didgeridoo,disc_scratching,dishes_pots_pans,dog_bow_wow,dog_growl,dog_whimper,double_bass,drawer_open_close,drill,drum_kit,duck_quack,electric_guitar,electric_piano,electric_shaver,electronic_organ,elk_bugle,eruption,finger_snapping,fire,fire_crackle,firecracker,fireworks,flute,fly_buzz,foghorn,fowl,french_horn,frog,frog_croak,frying_food,gargling,glass_breaking,glass_clink,glockenspiel,gong,goose_honk,guitar_strum,guitar_tapping,gunshot_gunfire,gurgling,hair_dryer,hammer,hammond_organ,harmonica,harp,harpsichord,hedge_trimmer,hi_hat,horse_clip_clop,horse_neigh,humming,insect,keyboard_musical,keys_jangling,lawn_mower,lion_roar,liquid_dripping,liquid_filling_container,liquid_pouring,liquid_sloshing,liquid_splashing,liquid_spraying,liquid_squishing,liquid_trickle_dribble,mallet_percussion,mandolin,marimba_xylophone,mechanical_fan,microwave_oven,mosquito_buzz,motorboat_speedboat,nose_blowing,oboe,ocean,orchestra,organ,owl_hoot,percussion,person_running,person_shuffling,person_walking,pig_oink,pigeon_dove_coo,playing_badminton,playing_hockey,playing_squash,playing_table_tennis,playing_tennis,playing_volleyball,plucked_string_instrument,power_tool,power_windows,printer,rail_transport,railroad_car,rapping,ratchet_and_pawl,rattle_instrument,rooster_crow,rope_skipping,rowboat_canoe_kayak,sailing,saw,saxophone,scissors,scuba_diving,sea_waves,sewing_machine,sheep_bleat,shofar,silence,singing_bowl,sink_filling_washing,sitar,skateboard,skiing,slap_smack,slurp,snake_hiss,snake_rattle,snare_drum,snicker,squeak,steel_guitar_slide_guitar,steelpan,stream_burbling,subway_metro,synthesizer,tabla,tambourine,tap,tearing,theremin,thump_thud,tick,tick_tock,timpani,toilet_flush,toothbrush,train_wheels_squealing,trombone,tuning_fork,turkey_gobble,typewriter,typing,typing_computer_keyboard,ukulele,underwater_bubbling,vacuum_cleaner,vibraphone,water,water_pump,water_tap_faucet,waterfall,whale_vocalization,whistling,whoosh_swoosh_swish,wind_chime,wind_instrument,wind_noise_microphone,wind_rustling_leaves,wood_cracking,writing,yodeling,zipper,zither
+PROV: natten-behov gick inte att rita @3x
+PROV: natten-huvudtal gick inte att rita @3x
+PROV: natten-lagen gick inte att rita @3x
+PROV: natten-natt1 gick inte att rita @3x
+PROV: natten-poang gick inte att rita @3x
+PROV: nattrapport-imagerenderer gick inte att rita med ImageRenderer
+PROV: övergångens inspelning har 85 giltiga fönster (minst 36 tävlar)
+PROV: profilens fil gick fram och tillbaka (6 mätningar)
+PROV: regelbundenhet 85.20211271251881 ur 14 K18-nätter
+PROV: skrev /tmp/idun_prov/andra-blad-aterstall.png (1179×2700 px)
+PROV: skrev /tmp/idun_prov/andra-blad-fel.png (1179×2700 px)
+PROV: skrev /tmp/idun_prov/andra-blad.png (1179×2700 px)
+PROV: skrev /tmp/idun_prov/aterhamtning-huvudtal.png (1179×5390 px)
+PROV: skrev /tmp/idun_prov/aterhamtning-poang.png (1179×5185 px)
+PROV: skrev /tmp/idun_prov/aterhamtning-utan-baslinje.png (1179×2811 px)
+PROV: skrev /tmp/idun_prov/aterhamtning.png (1179×2811 px)
+PROV: skrev /tmp/idun_prov/blad-vaknatid-bara-i-morgon.png (1179×2400 px)
+PROV: skrev /tmp/idun_prov/blad-vaknatid-utrakning.png (1179×3900 px)
+PROV: skrev /tmp/idun_prov/blad-vaknatid-vanlig.png (1179×2100 px)
+PROV: skrev /tmp/idun_prov/blad-vaknatid.png (1179×2400 px)
+PROV: skrev /tmp/idun_prov/dagbok-kvall-vald.png (1179×1911 px)
+PROV: skrev /tmp/idun_prov/dagbok-kvall.png (1179×1444 px)
+PROV: skrev /tmp/idun_prov/dagbok-morgon-vald.png (1179×1284 px)
+PROV: skrev /tmp/idun_prov/dagbok-morgon.png (1179×1284 px)
+PROV: skrev /tmp/idun_prov/forslag-blad-utan-typ.png (1179×2100 px)
+PROV: skrev /tmp/idun_prov/forslag-blad.png (1179×2100 px)
+PROV: skrev /tmp/idun_prov/forslag-lista.png (1179×3000 px)
+PROV: skrev /tmp/idun_prov/k18-kurva-ljud-markerad.png (1179×4790 px)
+PROV: skrev /tmp/idun_prov/k18-kurva-ljud.png (1179×4749 px)
+PROV: skrev /tmp/idun_prov/k18-kurva-stadium.png (1179×3594 px)
+PROV: skrev /tmp/idun_prov/k18-kurva.png (1179×3560 px)
+PROV: skrev /tmp/idun_prov/kondition-data-saknas.png (1179×4200 px)
+PROV: skrev /tmp/idun_prov/kondition-data.png (1179×4200 px)
+PROV: skrev /tmp/idun_prov/kondition-kort.png (1179×2700 px)
+PROV: skrev /tmp/idun_prov/kondition-skarm.png (1179×4500 px)
+PROV: skrev /tmp/idun_prov/kondition-whoop.png (1179×2700 px)
+PROV: skrev /tmp/idun_prov/kropp-formular-tom.png (1179×4500 px)
+PROV: skrev /tmp/idun_prov/kropp-formular.png (1179×4500 px)
+PROV: skrev /tmp/idun_prov/landskap-k18.png (1179×870 px)
+PROV: skrev /tmp/idun_prov/landskap-vald.png (1179×1650 px)
+PROV: skrev /tmp/idun_prov/landskap.png (1179×1650 px)
+PROV: skrev /tmp/idun_prov/ljud-rapport.png (1179×4677 px)
+PROV: skrev /tmp/idun_prov/lyssnaren.png (1179×1841 px)
+PROV: skrev /tmp/idun_prov/matt-andning.png (1179×1822 px)
+PROV: skrev /tmp/idun_prov/matt-hrv-utan-baslinje.png (1179×1893 px)
+bild: andra-blad-aterstall.png
+bild: andra-blad-fel.png
+bild: andra-blad.png
+bild: aterhamtning-huvudtal.png
+bild: aterhamtning-poang.png
+bild: aterhamtning-utan-baslinje.png
+bild: aterhamtning.png
+bild: blad-vaknatid-bara-i-morgon.png
+bild: blad-vaknatid-utrakning.png
+bild: blad-vaknatid-vanlig.png
+bild: blad-vaknatid.png
+bild: dagbok-kvall-vald.png
+bild: dagbok-kvall.png
+bild: dagbok-morgon-vald.png
+bild: dagbok-morgon.png
+bild: forslag-blad-utan-typ.png
+bild: forslag-blad.png
+bild: forslag-lista.png
+bild: k18-kurva-ljud-markerad.png
+bild: k18-kurva-ljud.png
+bild: k18-kurva-stadium.png
+bild: k18-kurva.png
+bild: kondition-data-saknas.png
+bild: kondition-data.png
+bild: kondition-kort.png
+bild: kondition-skarm.png
+bild: kondition-whoop.png
+bild: kropp-formular-tom.png
+bild: kropp-formular.png
+bild: landskap-k18.png
+bild: landskap-vald.png
+bild: landskap.png
+bild: ljud-rapport.png
+bild: lyssnaren.png
+bild: matt-andning.png
+bild: matt-hrv-utan-baslinje.png
+bild: matt-hrv-utan-k18.png
+bild: matt-hrv.png
+bild: matt-hudtemp-utan-baslinje.png
+bild: matt-hudtemp-utan-k18.png
+bild: matt-hudtemp.png
+bild: matt-ljud-utan-ljud.png
+bild: matt-ljud.png
+bild: matt-rorelse.png
+bild: morgon-behov.png
+bild: morgon-fel.png
+bild: morgon-foregaende.png
+bild: morgon-huvudtal.png
+bild: morgon-natt1.png
+bild: morgon-poang.png
+bild: morgon-utan-baslinje.png
+bild: morgon-utan-k18.png
+bild: morgon-utan-lager.png
+bild: morgon-utan-ljud.png
+bild: morgon-utan-stadier.png
+bild: morgon-vaknatid.png
+bild: morgon.png
+bild: natten-andrad.png
+bild: natten-behov.png
+bild: natten-borjan-saknas.png
+bild: natten-huvudtal.png
+bild: natten-lagen.png
+bild: natten-natt1.png
+bild: natten-poang.png
+bild: natten-preliminar.png
+bild: natten-slutet-saknas.png
+bild: natten-stadium-djup.png
+bild: natten-stadium-rem.png
+bild: natten-stadium-vaken.png
+bild: natten-utan-baslinje.png
+bild: natten-utan-k18.png
+bild: natten-utan-stadier.png
+bild: natten.png
+bild: nattens-kurva-markerad.png
+bild: nattens-kurva.png
+bild: natter-rader.png
+bild: nattkurva-valt-utan-stadier.png
+bild: nattrapport-delar.png
+bild: pass-karta.png
+bild: pass-nu-inne.png
+bild: pass-nu.png
+bild: pass-oversikt-inne.png
+bild: pass-oversikt.png
+bild: pass-sidor.png
+bild: poincare-k18.png
+bild: poincare-spelar.png
+bild: poincare.png
+bild: profil-kondition-tom.png
+bild: profil-kondition.png
+bild: profil-last.png
+bild: profil-tom.png
+bild: profil.png
+bild: skarm-aterhamtning-huvudtal.png
+bild: skarm-aterhamtning-poang.png
+bild: skarm-aterhamtning.png
+bild: skarm-data.png
+bild: skarm-idunn-mot-whoop.png
+bild: skarm-k18-kurva-ljud.png
+bild: skarm-k18-kurva.png
+bild: skarm-landskap.png
+bild: skarm-matt-andning.png
+bild: skarm-matt-hrv.png
+bild: skarm-matt-hudtemp.png
+bild: skarm-matt-ljud.png
+bild: skarm-matt-rorelse.png
+bild: skarm-morgon-batteri-lagt.png
+bild: skarm-morgon-behov.png
+bild: skarm-morgon-fel.png
+bild: skarm-morgon-foregaende.png
+bild: skarm-morgon-huvudtal.png
+bild: skarm-morgon-ingen-natt.png
+bild: skarm-morgon-poang.png
+bild: skarm-morgon-raknar.png
+bild: skarm-morgon-tom-fel.png
+bild: skarm-morgon-utan-baslinje.png
+bild: skarm-morgon-utan-k18.png
+bild: skarm-morgon-utan-lager.png
+bild: skarm-morgon-utan-stadier.png
+bild: skarm-morgon-vantar.png
+bild: skarm-morgon.png
+bild: skarm-natten-andrad.png
+bild: skarm-natten-behov.png
+bild: skarm-natten-borjan-saknas.png
+bild: skarm-natten-huvudtal.png
+bild: skarm-natten-lagen.png
+bild: skarm-natten-stadium.png
+bild: skarm-natten.png
+bild: skarm-nattens-kurva.png
+bild: skarm-natter-tom.png
+bild: skarm-natter.png
+bild: skarm-nattrapport.png
+bild: skarm-poincare-k18.png
+bild: skarm-poincare.png
+bild: skarm-trend-6m.png
+bild: skarm-trend.png
+bild: skarm-whoop-natter.png
+bild: steptest-pagar.png
+bild: steptest-pass.png
+bild: steptest-start-utan.png
+bild: steptest-start.png
+bild: trend-6m-vilopuls.png
+bild: trend-6m.png
+bild: trend-aterhamtning-huvudtal.png
+bild: trend-aterhamtning-poang.png
+bild: trend-aterhamtning.png
+bild: trend-djupsomn.png
+bild: trend-effektivitet.png
+bild: trend-hudtemp.png
+bild: trend-m-bakat.png
+bild: trend-m.png
+bild: trend-markerad.png
+bild: trend-snarkning.png
+bild: trend-sombrist-huvudtal.png
+bild: trend-somn.png
+bild: trend-somnbrist.png
+bild: trend-somnpoang.png
+bild: trend-utan-baslinje.png
+bild: trend-v-somn.png
+bild: trend-v.png
+bild: trend-val.png
+bild: ute-pagar.png
+bild: ute-pass.png
+bild: ute-vila.png
+bild: vag-morgon.png
+bild: vag-natten.png
+bild: vag-overgang-morgon.png
+bild: vag-overgang.png
+bild: vag-trend.png
+bild: whoop-natter-rader.png
