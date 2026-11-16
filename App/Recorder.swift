@@ -151,7 +151,8 @@ final class Recorder: NSObject, ObservableObject {
     private var publishScheduled = false
     private var syncedAt = Date.distantPast
     private var seeded = false
-    private var computingNights = false
+    /// BESLUT B125. Nätterna räknas just nu: Morgon säger det (`Morgonläge`). Läsbar utifrån, skrivs bara här.
+    @Published private(set) var computingNights = false
     /// METOD M55. En ändring kom medan nätterna räknades: räkna en gång till när den räkningen är klar.
     private var computeAgain = false
 

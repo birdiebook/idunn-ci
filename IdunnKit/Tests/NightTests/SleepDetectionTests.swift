@@ -470,6 +470,31 @@ final class SleepDetectionTests: XCTestCase {
                                                  windowEnd: t + 7 * 3600).start)
     }
 
+    /// BESLUT B125. Slutglappet mäts till det tidigaste av fönstrets slut och nu (påhittade poster).
+    func testOfullständigtSlutMätsTillNu() {
+        let t: Int = Self.t0
+        let poster: [K18Record] = (0..<(8 * 3600)).map { (s: Int) -> K18Record in rec(t + s, angle: 0) }
+        let från: Int = t
+        let till: Int = t + 11 * 3600
+        let slutPost: Int = t + 8 * 3600 - 1
+        // Räknad strax efter sista posten: datan har inte hunnit längre, inget glapp.
+        let strax = SleepDetection.incomplete(poster, from: från, to: till, windowStart: t + 150,
+                                              windowEnd: slutPost, now: slutPost + 120)
+        XCTAssertFalse(strax.end, "två minuter efter sista posten")
+        // Räknad långt efter sista posten (två timmar): slutet saknas.
+        let långt = SleepDetection.incomplete(poster, from: från, to: till, windowStart: t + 150,
+                                              windowEnd: slutPost, now: slutPost + 2 * 3600)
+        XCTAssertTrue(långt.end, "datan slutar två timmar före nu")
+        // Utan nu, som förut: till fönstrets slut.
+        let utan = SleepDetection.incomplete(poster, from: från, to: till, windowStart: t + 150,
+                                             windowEnd: slutPost)
+        XCTAssertTrue(utan.end)
+        // Nu efter fönstrets slut ändrar inget.
+        let efter = SleepDetection.incomplete(poster, from: från, to: till, windowStart: t + 150,
+                                              windowEnd: slutPost, now: till + 3600)
+        XCTAssertTrue(efter.end)
+    }
+
     func testSammanfattningenBärMärkningen() throws {
         let n: DemoK18Nights.Night = DemoK18Nights.night(daysBeforeLast: 0, shortGaps: false)
         let zon: Int = n.utcOffsetSeconds

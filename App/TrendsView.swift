@@ -60,7 +60,9 @@ struct TrendsView: View {
         // Nattens kort, med svepet och pilarna kvar: en natt i taget bakåt eller framåt.
         .navigationDestination(item: $öppnad) { dag in
             MorningCardScreen(days: dagar, summaries: MorningCardView.nights(recorder.summaries),
-                              start: dag, showsData: false, huvudtal: behov.huvudtal)
+                              start: dag, showsData: false, huvudtal: behov.huvudtal,
+                              idag: MorningCardView.idag(now: Date()),
+                              läge: MorningCardView.läge(recorder, now: Date()))
         }
         .onChange(of: recorder.summaries, initial: true) { räkna() }
         .onChange(of: period) { markerad = nil }

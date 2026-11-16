@@ -125,6 +125,10 @@ final class IdunnProvNatten: XCTestCase {
         slutet.incompleteEnd = true
         try rendera(NightStack(summary: början, bundle: n.bundle, values: n.values), namn: "natten-borjan-saknas")
         try rendera(NightStack(summary: slutet, bundle: n.bundle, values: n.values), namn: "natten-slutet-saknas")
+        // BESLUT B125. Samma natt som preliminär: i stället för "slutet saknas" står hur långt datan når.
+        var preliminär: NightSummary = slutet
+        preliminär.preliminary = true
+        try rendera(NightStack(summary: preliminär, bundle: n.bundle, values: n.values), namn: "natten-preliminar")
         try fånga(NavigationStack {
             ScrollView { NightStack(summary: början, bundle: n.bundle, values: n.values) }
                 .background(Tema.bg)

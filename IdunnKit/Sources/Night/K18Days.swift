@@ -105,9 +105,11 @@ public enum K18Days {
     /// `NightResult.sound`; utan den, eller utan ljud, är `sound` `nil`.
     ///
     /// METOD M55 · BESLUT B70. Med `edit` räknas natten med den givna perioden (`K18Night.analyze(…, edit:)`).
+    /// BESLUT B125. Med `now` mäts slutglappet till nu (`SleepDetection.detect`); `nil` = dygnsfönstrets slut.
     public static func night(wakeDay: WakeDay, includeNext: Bool, recordingStems: [String],
                              fallbackOffsetSeconds: Int, load: (String) -> File?,
-                             sound: NightSound.Analyzer? = nil, edit: SleepEdit? = nil) -> NightResult? {
+                             sound: NightSound.Analyzer? = nil, edit: SleepEdit? = nil,
+                             now: Date? = nil) -> NightResult? {
         var filer: [File] = []
         for stem in stems(wakeDay: wakeDay, includeNext: includeNext, recordingStems: recordingStems,
                           utcOffsetSeconds: fallbackOffsetSeconds) {
@@ -115,14 +117,15 @@ public enum K18Days {
         }
         guard !filer.isEmpty else { return nil }
         return compute(wakeDay: wakeDay, files: filer, fallbackOffsetSeconds: fallbackOffsetSeconds, sound: sound,
-                       edit: edit)
+                       edit: edit, now: now)
     }
 
     /// Natten som slutar `wakeDay`: zonerna ur sidofilerna (`fallbackOffsetSeconds`,
     /// telefonens zon nu, när de saknas), strömmande läsning av notiserna och
     /// `K18Night.analyze`. `nil` = ingen natt (ingen sömnperiod, BESLUT B31).
     public static func compute(wakeDay: WakeDay, files: [File], fallbackOffsetSeconds: Int,
-                               sound: NightSound.Analyzer? = nil, edit: SleepEdit? = nil) -> NightResult? {
+                               sound: NightSound.Analyzer? = nil, edit: SleepEdit? = nil,
+                               now: Date? = nil) -> NightResult? {
         // Ett arkiv som inte går att läsa räknas som en fil som saknas.
         var arkiv: [String: DayArchive] = [:]
         for f in files where f.frames == nil {
@@ -155,7 +158,7 @@ public enum K18Days {
         let serie: K18Series = samlare.series()
         guard var natt = K18Night.analyze(serie, wakeDay: wakeDay,
                                           startOffsetSeconds: zoner.start, endOffsetSeconds: zoner.end,
-                                          edit: edit) else {
+                                          edit: edit, now: now) else {
             return nil
         }
         // METOD M44. Ljudet räknas mot samma serie och samma lager som kurvan.

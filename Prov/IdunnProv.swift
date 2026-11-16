@@ -278,8 +278,33 @@ final class IdunnProv: XCTestCase {
         XCTAssertNil(MorningCard.step(dagar.map(\.day), from: kort.day, by: 1), "› finns inte på senaste morgonen")
         try fånga(NavigationStack {
             MorningCardScreen(days: dagar, summaries: nätter, bundles: d.bundles, loadsCurves: false,
-                              band: Bandstatus(batteri: 72, ansluten: true))
+                              band: Bandstatus(batteri: 72, ansluten: true), idag: natt)
         }, namn: "skarm-morgon", höjd: 1_500)
+        // BESLUT B125. Dagens dag är dagen efter den senaste natten: Idag är en tom sida med stegen och hur långt de
+        // kommit, och gårdagen ligger ett steg bakåt. Klockslaget är påhittat.
+        let dataTill: Date = Calendar.current.date(bySettingHour: 6, minute: 40, second: 0, of: nu) ?? nu
+        let väntar = Morgonläge.nu(ansluten: true, hämtar: true, räknar: false, dataTill: dataTill, hämtatTill: nil)
+        let räknar = Morgonläge.nu(ansluten: true, hämtar: false, räknar: true, dataTill: dataTill, hämtatTill: nil)
+        let ingen = Morgonläge.nu(ansluten: true, hämtar: false, räknar: false, dataTill: dataTill, hämtatTill: nil)
+        XCTAssertEqual([väntar.band, väntar.hämtar, väntar.räknar], [.klart, .pågår, .väntar])
+        XCTAssertEqual([räknar.band, räknar.hämtar, räknar.räknar], [.klart, .klart, .pågår])
+        XCTAssertEqual([ingen.band, ingen.hämtar, ingen.räknar], [.klart, .klart, .väntar])
+        XCTAssertEqual(Morgonläge.nu(ansluten: false, hämtar: false, räknar: false, dataTill: nil,
+                                     hämtatTill: nil).band, .pågår)
+        XCTAssertEqual(väntar.hämtarText, "Hämtar natten från bandet · data till 06:40")
+        XCTAssertFalse(väntar.ingenNatt)
+        XCTAssertFalse(räknar.ingenNatt)
+        XCTAssertTrue(ingen.ingenNatt)
+        XCTAssertEqual(ingen.ingenNattText, "Ingen natt för idag än · data till 06:40")
+        XCTAssertEqual(Morgonläge.nu(ansluten: true, hämtar: false, räknar: false, dataTill: nil,
+                                     hämtatTill: nil).ingenNattText, "Ingen natt för idag än")
+        for (läge, namn) in [(väntar, "skarm-morgon-vantar"), (räknar, "skarm-morgon-raknar"),
+                             (ingen, "skarm-morgon-ingen-natt")] {
+            try fånga(NavigationStack {
+                MorningCardScreen(days: dagar, summaries: nätter, bundles: d.bundles, loadsCurves: false,
+                                  band: Bandstatus(batteri: 72, ansluten: true), idag: natt + 1, läge: läge)
+            }, namn: namn, höjd: 1_500)
+        }
         try fånga(NavigationStack {
             MorningCardScreen(days: dagar, summaries: nätter, alert: tyst, bundles: d.bundles, loadsCurves: false,
                               band: .okänd)

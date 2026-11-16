@@ -202,8 +202,10 @@ public enum SleepDetection {
     /// högst `edgeNearSeconds` efter det (`windowEnd`). Glappet är poster som saknas (inte puls 0), räknat på
     /// sekunderna i dygnsfönstret `from`…`to`; fönstrets kant räknas som glappets början eller slut när ingen post
     /// finns före eller efter. Då ligger insomningen eller uppvaknandet där datan börjar eller slutar.
+    /// BESLUT B125. Slutglappet mäts till det tidigaste av fönstrets slut och `now` (sekunder, `nil` = fönstrets
+    /// slut): en natt som räknas strax efter sista posten har inget glapp, datan har inte hunnit längre än så.
     static func incomplete(_ records: [K18Record], from: Int, to: Int,
-                           windowStart: Int, windowEnd: Int) -> (start: Bool, end: Bool) {
+                           windowStart: Int, windowEnd: Int, now: Int? = nil) -> (start: Bool, end: Bool) {
         let lo: Int = firstIndex(records, atOrAfter: from)
         let hi: Int = firstIndex(records, atOrAfter: to)
         guard lo < hi else { return (false, false) }
@@ -216,7 +218,8 @@ public enum SleepDetection {
         var end = false
         let j: Int = min(hi, firstIndex(records, atOrAfter: windowEnd + edgeNearSeconds + 1)) - 1
         if j >= lo {
-            let next: Int = j + 1 < hi ? records[j + 1].time : to
+            let measuredTo: Int = min(to, now ?? to)
+            let next: Int = j + 1 < hi ? records[j + 1].time : measuredTo
             end = next - records[j].time >= edgeGapSeconds
         }
         return (start, end)
@@ -317,7 +320,10 @@ public enum SleepDetection {
     /// när fönstret inte har något block längre än 30 minuter, eller inget
     /// inaktivitetspass inom blocket (en dag utan sömn). Bara hela epoker
     /// inom fönstret räknas.
-    public static func detect(_ series: K18Series, from: Date, to: Date) -> SleepPeriod? {
+    ///
+    /// BESLUT B125. `now` (klockan, förd in som värde) begränsar var slutglappet mäts: till det tidigaste av `to`
+    /// och `now`. `nil` = `to`, som förut.
+    public static func detect(_ series: K18Series, from: Date, to: Date, now: Date? = nil) -> SleepPeriod? {
         guard let s = scan(series, from: from, to: to) else { return nil }
         let medians: [Double?] = rollingMedian(s.steps)
         let present: [Double] = medians.compactMap { $0 }
@@ -346,7 +352,8 @@ public enum SleepDetection {
         }
         let edge = incomplete(series.records, from: Int(from.timeIntervalSince1970.rounded(.up)),
                               to: Int(to.timeIntervalSince1970.rounded(.down)),
-                              windowStart: p.windowStart, windowEnd: p.windowEnd)
+                              windowStart: p.windowStart, windowEnd: p.windowEnd,
+                              now: now.map { (d: Date) -> Int in Int(d.timeIntervalSince1970.rounded(.down)) })
         p.incompleteStart = edge.start
         p.incompleteEnd = edge.end
         return p

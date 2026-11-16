@@ -162,8 +162,16 @@ struct NightStack: View {
 
     /// BESLUT B83 · BESLUT B73. Början eller slutet av natten saknas i bandets data: några ord under Sömnperiod, så att
     /// det syns varför tiden kan vara fel. En ändrad period är användaren egen och märks inte.
+    ///
+    /// BESLUT B125. Bara en färdig natt får varningen. En preliminär natt med ett slutglapp säger i stället hur långt
+    /// datan når (`data till`, periodens slut) och att resten hämtas från bandet; början saknas säger den inget om.
     private var saknas: String? {
         guard !summary.isEdited else { return nil }
+        if summary.preliminary == true {
+            guard summary.incompleteEnd == true else { return nil }
+            guard let slut = summary.end else { return "resten hämtas från bandet" }
+            return "data till " + Fmt.clock(date: slut) + " · resten hämtas från bandet"
+        }
         switch (summary.incompleteStart == true, summary.incompleteEnd == true) {
         case (true, true): return "början och slutet saknas"
         case (true, false): return "början saknas"
@@ -208,8 +216,8 @@ struct NightStack: View {
                         .font(.system(size: 9, weight: .bold))
                     Text(u)
                         .font(.system(size: 10))
-                        .lineLimit(1)
-                        .fixedSize()
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(Tema.yellow)
             }

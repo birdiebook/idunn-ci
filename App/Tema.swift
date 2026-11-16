@@ -216,6 +216,13 @@ enum Fmt {
         return "\(c.day ?? 1) \(månader[m])"
     }
 
+    /// BESLUT B125. Klockslaget för ett ögonblick som "06:40", alltid 24-timmars och i telefonens zon (en notis och en
+    /// rad om vad som händer ska läsas lika oavsett telefonens språk).
+    static func clock(date: Date) -> String {
+        let c: DateComponents = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return clock(minutes: Double((c.hour ?? 0) * 60 + (c.minute ?? 0)))
+    }
+
     /// Klockslaget för ett ögonblick, i telefonens zon.
     static func clock(time: TimeInterval) -> String {
         Date(timeIntervalSince1970: time).formatted(.dateTime.hour().minute())

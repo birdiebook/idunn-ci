@@ -109,15 +109,19 @@ public enum K18Night {
     /// dygnet. `startOffsetSeconds`/`endOffsetSeconds` är telefonens zon vid
     /// dygnsfönstrets början och slut.
     ///
+    /// BESLUT B125. `now` förs vidare till `SleepDetection.detect`: slutglappet mäts till det tidigaste av
+    /// fönstrets slut och `now`; `nil` = fönstrets slut.
+    ///
     /// METOD M55 · BESLUT B70. Med `edit` (användaren ändring för dagen) är perioden den givna i stället för den hittade
     /// (`SleepDetection.given`), och resten räknas som vanligt inom den; natten finns då även en dag där ingen period
     /// hittades. En ändring för en annan dag, som avvisas av `SleepEdit.check` mot dygnsfönstret, eller vars period
     /// saknar K18, gäller inte: natten räknas med den hittade perioden som utan ändring.
     public static func analyze(_ series: K18Series, wakeDay: WakeDay,
-                               startOffsetSeconds: Int, endOffsetSeconds: Int, edit: SleepEdit? = nil) -> NightResult? {
+                               startOffsetSeconds: Int, endOffsetSeconds: Int, edit: SleepEdit? = nil,
+                               now: Date? = nil) -> NightResult? {
         let w = SleepDetection.dayWindow(wakeDay: wakeDay, startOffsetSeconds: startOffsetSeconds,
                                          endOffsetSeconds: endOffsetSeconds)
-        let found: SleepPeriod? = SleepDetection.detect(series, from: w.from, to: w.to)
+        let found: SleepPeriod? = SleepDetection.detect(series, from: w.from, to: w.to, now: now)
         if let e = edit, e.wakeDay == wakeDay, (try? e.check(window: w.from, to: w.to)) != nil,
            let given = SleepDetection.given(series, from: w.from, to: w.to, onset: e.onset, wake: e.wake) {
             var r: NightResult = analyze(series, sleep: given, utcOffsetSeconds: endOffsetSeconds)

@@ -173,7 +173,7 @@ public enum NightLedger {
             let resultat: NightResult? = K18Days.night(wakeDay: j.wakeDay, includeNext: j.settled,
                                                        recordingStems: recordingStems,
                                                        fallbackOffsetSeconds: utcOffsetSeconds, load: load,
-                                                       sound: sound, edit: ändring)
+                                                       sound: sound, edit: ändring, now: now)
             let digest: NightDigest? = resultat.map { (r: NightResult) -> NightDigest in
                 NightDigest(r, preliminary: j.preliminary)
             }

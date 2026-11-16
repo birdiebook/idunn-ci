@@ -4,6 +4,8 @@ import Night
 import Sound
 import WhoopFrames
 
+/// BESLUT B125. "Idag" skrivs bara när sidans dag är dagens uppvakningsdag, och en rad överst säger vad som händer
+/// när dagens natt inte finns än (Morgonläge). Ändrar B82 och B83.
 /// METOD M19 · METOD M25 · METOD M33 · BESLUT B19 · BESLUT B40 · BESLUT B52 · BESLUT B62 · BESLUT B63
 /// Morgon, appens första vy, i skissens form (design/skiss.html, läget Nu): nattens pulskurva med stadierna under (ett
 /// tryck öppnar Natten; sedan B77 står kurvan bara i Natten, och sedan B78 står sömnen med tiderna under ringarna), huvudtalen Återhämtning och Sömn i sina ringar (Återhämtning öppnar
@@ -32,7 +34,8 @@ struct MorningCardView: View {
                                                 link: recorder.link, summaries: recorder.summaries, now: Date(),
                                                 lacksLayers: utanLager),
                               huvudtal: behov.huvudtal,
-                              band: Bandstatus(batteri: recorder.battery, ansluten: recorder.link == .connected))
+                              band: Bandstatus(batteri: recorder.battery, ansluten: recorder.link == .connected),
+                              idag: Self.idag(now: Date()), läge: Self.läge(recorder, now: Date()))
         }
         .onChange(of: recorder.summaries, initial: true) { dagar = Self.days(summaries: recorder.summaries) }
         .task(id: senasteNatt) {
@@ -53,6 +56,24 @@ struct MorningCardView: View {
             utanLager = NightChoice.lacksLayers(source: s.origin, layers: b?.layers)
             kontrollerad = s
         }
+    }
+
+    /// BESLUT B125. Dagens uppvakningsdag: väggklockans dag nu i telefonens zon, samma dagbegrepp som felraden
+    /// (`alert`) och `NightLedger` använder för vilken dag en natt hör till.
+    static func idag(now: Date) -> WakeDay {
+        WakeDay(now, utcOffsetSeconds: TimeZone.current.secondsFromGMT(for: now))
+    }
+
+    /// BESLUT B125. Vad som pågår för dagens natt: bandet anslutet, hämtningen och räkningen. "Data till" är klockslaget
+    /// för bandets nyaste post som telefonen har (`ListenerStatus.lastK18Record`), bara om den ligger i dagens
+    /// dygnsfönster (från kl 12 dagen före); hur långt hämtningen kommit är dess nyaste post (`fetchProgress.last`).
+    static func läge(_ recorder: Recorder, now: Date) -> Morgonläge {
+        let zon: Int = TimeZone.current.secondsFromGMT(for: now)
+        let fönsterStart: Date = NightLedger.windowEnd(idag(now: now) - 1, utcOffsetSeconds: zon)
+        let till: Date? = recorder.status.lastK18Record.flatMap { (d: Date) -> Date? in d > fönsterStart ? d : nil }
+        let hämtat: Date? = recorder.fetchProgress.last.flatMap { (d: Date) -> Date? in d > fönsterStart ? d : nil }
+        return Morgonläge.nu(ansluten: recorder.link == .connected, hämtar: recorder.fetching,
+                             räknar: recorder.computingNights, dataTill: till, hämtatTill: hämtat)
     }
 
     /// BESLUT B52. Natten på senaste morgonen, om den kommer ur K18 (en gammal inspelning har inga lager
@@ -165,11 +186,16 @@ struct MorningCardScreen: View {
     var loadsCurves = true
     /// BESLUT B82. Bandets batteri och anslutning uppe till höger.
     var band: Bandstatus = .okänd
+    /// BESLUT B125. Dagens uppvakningsdag; "Idag" skrivs bara för den. `nil` = senaste morgonen (förhandsvisningen).
+    var idag: WakeDay?
+    /// BESLUT B125. Vad som pågår på den tomma sidan Idag (när dagens natt inte finns än).
+    var läge: Morgonläge?
     @State private var vald: WakeDay?
 
     init(days: [MorningCard.Day], summaries: [WakeDay: NightSummary] = [:], alert: ListenerAlert? = nil,
          start: WakeDay? = nil, showsData: Bool = true, bundles: [WakeDay: NightLoader.CurveBundle] = [:],
-         huvudtal: Huvudtal = .tom, loadsCurves: Bool = true, band: Bandstatus = .okänd) {
+         huvudtal: Huvudtal = .tom, loadsCurves: Bool = true, band: Bandstatus = .okänd,
+         idag: WakeDay? = nil, läge: Morgonläge? = nil) {
         self.days = days
         self.summaries = summaries
         self.alert = alert
@@ -178,14 +204,27 @@ struct MorningCardScreen: View {
         self.huvudtal = huvudtal
         self.loadsCurves = loadsCurves
         self.band = band
+        self.idag = idag
+        self.läge = läge
         _vald = State(initialValue: start)
     }
 
-    private var senaste: WakeDay? { days.last?.day }
+    /// BESLUT B125. Sidorna, äldsta först: morgnarna med natt, och när `idag` är senare än den senaste natten en tom
+    /// sida för dagens dag. Utan `idag` (förhandsvisningen) bara morgnarna.
+    private var sidor: [WakeDay] {
+        var d: [WakeDay] = days.map { (k: MorningCard.Day) -> WakeDay in k.day }
+        if let i = idag, (d.last.map { (l: WakeDay) -> Bool in l < i } ?? true) { d.append(i) }
+        return d
+    }
+
+    private var senaste: WakeDay? { sidor.last }
+
+    /// BESLUT B125. Dagen som rubriken kallar Idag.
+    private var idagsida: WakeDay? { idag ?? days.last?.day }
 
     /// Morgonen som visas: den valda om den finns, annars senaste.
     private var aktuell: WakeDay? {
-        if let v = vald, days.contains(where: { (k: MorningCard.Day) -> Bool in k.day == v }) { return v }
+        if let v = vald, sidor.contains(v) { return v }
         return senaste
     }
 
@@ -245,10 +284,20 @@ struct MorningCardScreen: View {
     private var innehåll: some View {
         if aktuell != nil {
             TabView(selection: sida) {
-                ForEach(days) { kort in
-                    MorningPage(card: kort, summary: summaries[kort.day], preloaded: bundles[kort.day],
-                                alert: kort.day == senaste ? alert : nil, huvudtal: huvudtal, load: loadsCurves)
-                        .tag(kort.day)
+                ForEach(sidor, id: \.self) { (dag: WakeDay) in
+                    Group {
+                        if let kort = days.first(where: { (k: MorningCard.Day) -> Bool in k.day == dag }) {
+                            MorningPage(card: kort, summary: summaries[kort.day], preloaded: bundles[kort.day],
+                                        alert: kort.day == senaste ? alert : nil, huvudtal: huvudtal,
+                                        load: loadsCurves)
+                        } else {
+                            // BESLUT B125. Dagens sida utan natt: tom på tal, med stegen.
+                            IdagTomVy(läge: läge ?? Morgonläge.nu(ansluten: false, hämtar: false, räknar: false,
+                                                                  dataTill: nil, hämtatTill: nil),
+                                      alert: alert)
+                        }
+                    }
+                    .tag(dag)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -270,10 +319,10 @@ struct MorningCardScreen: View {
     /// BESLUT B82. "‹ Idag ›" som i Whoop: pilarna går en morgon med natt bakåt eller framåt (`MorningCard.step`), och
     /// mitten säger Idag för senaste morgonen och annars datumet. Svepet gör detsamma.
     private func dagväljare(_ dag: WakeDay) -> some View {
-        let dagarna: [WakeDay] = days.map { (k: MorningCard.Day) -> WakeDay in k.day }
+        let dagarna: [WakeDay] = sidor
         return HStack(spacing: 2) {
             dagpil("chevron.left", "Föregående morgon", MorningCard.step(dagarna, from: dag, by: -1))
-            Text(dag == senaste ? "Idag" : Fmt.weekday(dag) + " " + Fmt.dayMonth(dag))
+            Text(dag == idagsida ? "Idag" : Fmt.weekday(dag) + " " + Fmt.dayMonth(dag))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Tema.text)
                 .lineLimit(1)
@@ -296,6 +345,104 @@ struct MorningCardScreen: View {
         .buttonStyle(.plain)
         .disabled(mål == nil)
         .accessibilityLabel(namn)
+    }
+}
+
+/// BESLUT B125. Vad som pågår medan dagens natt inte finns än, som ett värde: de tre stegen (bandet, hämtningen,
+/// räkningen) med var sitt läge, klockslaget för bandets nyaste post som telefonen har, och hur långt hämtningen kommit.
+struct Morgonläge: Equatable {
+    enum Läge: Equatable {
+        case klart
+        case pågår
+        case väntar
+    }
+
+    var band: Läge
+    var hämtar: Läge
+    var räknar: Läge
+    /// Klockslaget för nyaste posten från bandet som telefonen har, när det finns data för dygnet.
+    var dataTill: Date?
+    /// Hur långt hämtningen kommit (nyaste posten den fått hem), medan den pågår.
+    var hämtatTill: Date?
+
+    /// Inget pågår (varken hämtning eller räkning) och ändå finns ingen natt: bandet har inte burits, eller natten
+    /// har inte börjat.
+    var ingenNatt: Bool { hämtar != .pågår && räknar != .pågår }
+
+    var bandText: String { band == .pågår ? "Söker bandet" : "Bandet" }
+
+    var hämtarText: String {
+        var t: String = "Hämtar natten från bandet"
+        if let d = dataTill { t += " · data till " + Fmt.clock(date: d) }
+        return t
+    }
+
+    var framstegText: String? {
+        guard hämtar == .pågår, let d = hämtatTill else { return nil }
+        return "hämtat till " + Fmt.clock(date: d)
+    }
+
+    var ingenNattText: String {
+        "Ingen natt för idag än" + (dataTill.map { (d: Date) -> String in " · data till " + Fmt.clock(date: d) } ?? "")
+    }
+
+    /// Läget ur det telefonen vet. Hämtningen är klar när den inte pågår och data finns.
+    static func nu(ansluten: Bool, hämtar: Bool, räknar: Bool, dataTill: Date?, hämtatTill: Date?) -> Morgonläge {
+        let h: Läge = hämtar ? .pågår : (dataTill != nil ? .klart : .väntar)
+        return Morgonläge(band: ansluten ? .klart : .pågår, hämtar: h, räknar: räknar ? .pågår : .väntar,
+                          dataTill: dataTill, hämtatTill: hämtatTill)
+    }
+}
+
+/// BESLUT B125. Sidan Idag när dagens natt inte finns: tom på tal, ett lugnt kort med stegen och hur långt de kommit.
+/// Felraden (om något är fel) står överst som på nattens sida.
+struct IdagTomVy: View {
+    let läge: Morgonläge
+    var alert: ListenerAlert?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if let a = alert { ListenerAlertRow(alert: a) }
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Natten är inte klar än")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Tema.text)
+                    steg(läge.band, läge.bandText, nil)
+                    steg(läge.hämtar, läge.hämtarText, läge.framstegText)
+                    steg(läge.räknar, "Räknar natten", nil)
+                    if läge.ingenNatt {
+                        Text(läge.ingenNattText)
+                            .font(.footnote)
+                            .foregroundStyle(Tema.dim)
+                            .padding(.top, 2)
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(TrendColor.surface, in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityElement(children: .combine)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+        .background(Tema.bg)
+    }
+
+    private func steg(_ l: Morgonläge.Läge, _ text: String, _ under: String?) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: l == .klart ? "checkmark.circle.fill" : (l == .pågår ? "circle.dotted" : "circle"))
+                .foregroundStyle(l == .klart ? Tema.green : (l == .pågår ? Tema.text : Tema.faint))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(text)
+                    .font(.subheadline)
+                    .foregroundStyle(l == .väntar ? Tema.faint : Tema.text)
+                if let u = under {
+                    Text(u).font(.footnote).foregroundStyle(Tema.dim)
+                }
+            }
+            Spacer(minLength: 0)
+        }
     }
 }
 

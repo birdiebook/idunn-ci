@@ -98,12 +98,13 @@ enum K18Nights {
 
     /// Natten för uppvakningsdagen ur dygnsfilerna och de gamla inspelningarna
     /// som överlappar fönstret (BESLUT B48); `nil` = ingen natt.
-    static func compute(_ day: WakeDay, includeNext: Bool, fallbackOffset: Int) -> NightResult? {
+    /// BESLUT B125. `now` är klockan: slutglappet ("slutet saknas") mäts till nu.
+    static func compute(_ day: WakeDay, includeNext: Bool, fallbackOffset: Int, now: Date = Date()) -> NightResult? {
         // METOD M44 · BESLUT B54. Natten läser också sitt ljud, så att kurvan och sammanfattningen delar uträkningen.
         // METOD M55 · BESLUT B70. En ändrad natt räknas med sin givna period, som sammanfattningen.
         K18Days.night(wakeDay: day, includeNext: includeNext, recordingStems: NightFiles.stems(),
                       fallbackOffsetSeconds: fallbackOffset, load: load, sound: SoundFiles.analyzer(),
-                      edit: SleepEditFile.load()[day])
+                      edit: SleepEditFile.load()[day], now: now)
     }
 
     /// Hela resultatet för en vy (kurvan, Poincarémolnet): räknas om ur
@@ -114,7 +115,7 @@ enum K18Nights {
         let dag = WakeDay(daysSince1970: n)
         let zon: Int = TimeZone.current.secondsFromGMT(for: now)
         let satt: Bool = NightLedger.isSettled(dag, now: now, utcOffsetSeconds: zon)
-        return compute(dag, includeNext: satt, fallbackOffset: zon)
+        return compute(dag, includeNext: satt, fallbackOffset: zon, now: now)
     }
 }
 
