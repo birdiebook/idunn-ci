@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import Journal
 import Markers
 import Pass
 import SleepNeed
@@ -19,6 +20,26 @@ struct ContentView: View {
     @State private var väcktidsval: Väcktidsval?
     /// BESLUT B103. Påminnelsen före läggdags: av eller på, och om notiser är nekade.
     @ObservedObject private var påminnelse = Läggdagspåminnelse.shared
+    /// BESLUT B130. Dagboken: morgonens fråga över hela appen, och kvällens blad.
+    @ObservedObject private var dagbok = DagbokModell.shared
+
+    /// BESLUT B130. Uppvakningsdagen morgonens fråga gäller, eller `nil` när den inte visas.
+    private var morgonfråga: Int? {
+        if case .morgon(let dag)? = dagbok.fråga { return dag }
+        return nil
+    }
+
+    /// BESLUT B130. Kvällens blad; dras det ner är det "Inte nu".
+    private var kvällsfråga: Binding<Kvällsfråga?> {
+        Binding<Kvällsfråga?>(
+            get: { () -> Kvällsfråga? in
+                if case .kväll(let dag)? = dagbok.fråga { return Kvällsfråga(dag: dag) }
+                return nil
+            },
+            set: { (ny: Kvällsfråga?) -> Void in
+                if ny == nil, case .kväll(let dag)? = dagbok.fråga { dagbok.inteNu(kväll: dag) }
+            })
+    }
 
     var body: some View {
         TabView(selection: $flik) {
@@ -46,6 +67,24 @@ struct ContentView: View {
                 // BESLUT B101. Bladet i sitt innehålls höjd, så att rubrikraden och hela uträkningen syns direkt.
                 .modifier(IInnehålletsHöjd())
                 .presentationBackground(Tema.bg)
+        }
+        // BESLUT B130 · METOD M75. Kvällens taggar: frågas när appen öppnas på kvällen, tills kvällen är besvarad.
+        .sheet(item: kvällsfråga) { (k: Kvällsfråga) in
+            KvällVy(valda: dagbok.dagbok.evening(k.dag)?.tags ?? [],
+                    spara: { (taggar: [EveningTag]) -> Void in dagbok.svara(kväll: k.dag, taggar: taggar) },
+                    inteNu: { dagbok.inteNu(kväll: k.dag) })
+                .modifier(IInnehålletsHöjd())
+                .presentationBackground(Tema.bg)
+        }
+        // BESLUT B130 · METOD M75. Morgonens skattning ges innan nattens tal har synts: frågan täcker hela appen.
+        .overlay {
+            if let dag = morgonfråga {
+                MorgonfrågaVy(vald: dagbok.dagbok.morning(dag)?.rested,
+                              välj: { (n: Int) -> Void in dagbok.svara(morgon: dag, utvilad: n) },
+                              hoppaÖver: { dagbok.hoppaÖver(morgon: dag) })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Tema.bg.ignoresSafeArea())
+            }
         }
         // BESLUT B65. Sömnbehovet räknas om när nätterna ändras.
         .onChange(of: recorder.summaries, initial: true) {
@@ -101,6 +140,8 @@ struct ContentView: View {
                 recorder.refresh()
                 // BESLUT B47. Ljudet startar när appen öppnas kl 20–04 och slutar när den öppnas efter 05.
                 SoundListener.shared.appBecameActive()
+                // BESLUT B130. Dagboken frågar när appen kommer fram: skattningen på morgonen, taggarna på kvällen.
+                dagbok.appenÖppnades()
             }
         }
         .onAppear { SoundListener.shared.appBecameActive() }

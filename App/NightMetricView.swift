@@ -62,7 +62,9 @@ struct NightMetricScreen: View {
                              typical: bundle.flatMap { (b: NightLoader.CurveBundle) -> NightCurve.Typical? in
                                  NightCurveView.typical(b.curve, stem: summary.stem, summaries: recorder.summaries)
                              },
-                             values: Trends.idunValues(recorder.summaries.compactMap(\.idunNight)), laddad: klar)
+                             values: Trends.idunValues(recorder.summaries.compactMap(\.idunNight)), laddad: klar,
+                             halvor: metric == .hrv ? Natthalvor(recorder.summaries) : Natthalvor(),
+                             taggar: metric == .hrv ? DagbokModell.shared.taggar(dag: summary.wakeDay?.daysSince1970) : [])
         }
         .background(Tema.bg)
         .navigationTitle(metric.title + " i natt")
@@ -83,6 +85,9 @@ struct NightMetricStack: View {
     var values: Trends.Values = [:]
     /// Falskt medan kurvan räknas: då står ingen "saknas"-text.
     var laddad = true
+    /// BESLUT B131 · METOD M76. Nattens två halvor per uppvakningsdag (bara HRV), och kvällens taggar för natten.
+    var halvor: Natthalvor = Natthalvor()
+    var taggar: [String] = []
 
     private var day: WakeDay { summary.wakeDay ?? WakeDay(daysSince1970: 0) }
     private var curve: NightCurve.Curve? { bundle?.curve }
@@ -115,8 +120,7 @@ struct NightMetricStack: View {
         VStack(spacing: 0) {
             switch metric {
             case .hrv:
-                BandRad(namn: "Nattens HRV", text: r.map { (x: MorningCard.Row) -> String in Fmt.num(x.value) + " ms" },
-                        värde: r?.value, område: r?.range, axel: r?.track, bra: 1, sista: true)
+                hrvRader(r)
             case .temp:
                 hudrad(r)
             case .resp:
@@ -131,6 +135,32 @@ struct NightMetricStack: View {
             }
         }
         .radkort()
+    }
+
+    /// BESLUT B131 · METOD M76. Nattens HRV, och under den nattens två halvor mot sina egna normalområden när natten
+    /// har dem. Raden under säger när någon halva ligger under sitt normala.
+    @ViewBuilder private func hrvRader(_ r: MorningCard.Row?) -> some View {
+        let a: MorningCard.Row? = halvor.rad(halvor.första, dag: day)
+        let b: MorningCard.Row? = halvor.rad(halvor.andra, dag: day)
+        let not: String? = halvor.text(dag: day, taggar: taggar)
+        if let a, let b {
+            BandRad(namn: "Nattens HRV", text: r.map { (x: MorningCard.Row) -> String in Fmt.num(x.value) + " ms" },
+                    värde: r?.value, område: r?.range, axel: r?.track, bra: 1)
+            BandRad(namn: "Första halvan", text: Fmt.num(a.value) + " ms",
+                    värde: a.value, område: a.range, axel: a.track, bra: 1)
+            BandRad(namn: "Andra halvan", text: Fmt.num(b.value) + " ms",
+                    värde: b.value, område: b.range, axel: b.track, bra: 1, sista: not == nil)
+            if let not {
+                Text(not)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Tema.dim)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 10)
+            }
+        } else {
+            BandRad(namn: "Nattens HRV", text: r.map { (x: MorningCard.Row) -> String in Fmt.num(x.value) + " ms" },
+                    värde: r?.value, område: r?.range, axel: r?.track, bra: 1, sista: true)
+        }
     }
 
     @ViewBuilder private func hudrad(_ r: MorningCard.Row?) -> some View {
@@ -217,7 +247,8 @@ struct NightMetricStack: View {
         let hi: Double = max(lo + 10, ((alla.max() ?? 80) + 5).rounded(.up))
         return diagramkort {
             NattMatt(t0: t0, t1: t1, lo: lo, hi: hi, tal: rutor(lo, hi, 20), format: { (v: Double) -> String in Fmt.num(v) },
-                     linje: punkter, band: band, stadier: stages, bredd: NightAnalysis.windowSeconds)
+                     linje: punkter, band: band, stadier: stages, bredd: NightAnalysis.windowSeconds,
+                     mitt: halvor.första[day] != nil ? curve.map { (c: NightCurve.Curve) -> TimeInterval in (c.start + c.end) / 2 } : nil)
                 .padding(.horizontal, 14)
             tecken(band.isEmpty ? [(Tema.accent, "i natt")] : [(Tema.accent, "i natt"), (Tema.band, "din vanliga natt")])
             if !stages.isEmpty { StadieTecken().padding(.horizontal, 14).font(.system(size: 10)) }

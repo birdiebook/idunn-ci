@@ -3,6 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 import Band
 import Fitness
+import Journal
 import Night
 import Sound
 import WhoopFrames
@@ -26,6 +27,8 @@ struct DataView: View {
     @ObservedObject private var kondition = KonditionModell.shared
     /// BESLUT B127. Coachen: kopplingen, reglaget och vad som skickats.
     @ObservedObject private var coach = CoachModell.shared
+    /// BESLUT B130. Dagboken: kvällens taggar och morgonens skattning.
+    @ObservedObject private var dagbok = DagbokModell.shared
     @State private var importing = false
     /// PLAN.md A3. Reglaget "Whoop-appen är borta": av som förval.
     @AppStorage(Recorder.utanWhoopKey) private var utanWhoop = false
@@ -51,7 +54,10 @@ struct DataView: View {
             onCoachKoppla: { () -> Void in coach.koppla(UIPasteboard.general.string ?? "") },
             onCoachPå: { (på: Bool) -> Void in coach.sätt(på: på) },
             onCoachSkicka: { () -> Void in coach.synka(tvinga: true) },
-            onCoachFrån: { () -> Void in coach.kopplaFrån() }
+            onCoachFrån: { () -> Void in coach.kopplaFrån() },
+            dagbok: dagbok.låst ? nil : dagbok.dagbok,
+            onKväll: { dagbok.öppnaKväll() },
+            onMorgon: { dagbok.öppnaMorgon() }
         )
         .onAppear { recorder.refresh() }
         .fileImporter(
@@ -126,6 +132,10 @@ struct DataScreen: View {
     var onCoachPå: (Bool) -> Void = { _ in }
     var onCoachSkicka: () -> Void = {}
     var onCoachFrån: () -> Void = {}
+    /// BESLUT B130 · METOD M75. Dagboken och vägen till kvällens blad och morgonens fråga. `nil` (förval) döljer sektionen.
+    var dagbok: Journal?
+    var onKväll: () -> Void = {}
+    var onMorgon: () -> Void = {}
 
     /// METOD M28. Nätterna ur K18, för kontrollen.
     private var k18Nights: [NightSummary] {
@@ -149,6 +159,11 @@ struct DataScreen: View {
             if let coach {
                 CoachSektion(läge: coach, onKoppla: onCoachKoppla, onPå: onCoachPå, onSkicka: onCoachSkicka,
                              onFrån: onCoachFrån)
+            }
+
+            // BESLUT B130. Dagboken: hur mycket som är loggat, och vägen till att ändra ett svar.
+            if let dagbok {
+                DagbokSektion(dagbok: dagbok, onKväll: onKväll, onMorgon: onMorgon)
             }
 
             Section {

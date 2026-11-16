@@ -45,6 +45,9 @@ targets:
       # BESLUT B127. Coachen: dokumenten som skickas, kopplingen och loggen över det skickade.
       - package: IdunnKit
         product: Coach
+      # BESLUT B130. Dagboken: kvällens taggar och morgonens skattning.
+      - package: IdunnKit
+        product: Journal
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: se.birdiebook.idun
@@ -121,6 +124,9 @@ targets:
       # BESLUT B123. Bandets batteri: rött under 20 % och påminnelsen om att ladda.
       - package: IdunnKit
         product: Band
+      # BESLUT B130. Dagboken: kvällens taggar och morgonens skattning.
+      - package: IdunnKit
+        product: Journal
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: se.birdiebook.idun.prov
