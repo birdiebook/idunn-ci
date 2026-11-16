@@ -1,8 +1,8 @@
 import SwiftUI
-import UIKit
 import UniformTypeIdentifiers
 import Band
 import Fitness
+import Journal
 import Night
 import Sound
 import WhoopFrames
@@ -24,8 +24,8 @@ struct DataView: View {
     @ObservedObject private var facit = SoundFacitStore.shared
     /// BESLUT B106. Profilen, Whoops avskrivna tal och skattningen av VO2 max.
     @ObservedObject private var kondition = KonditionModell.shared
-    /// BESLUT B127. Coachen: kopplingen, reglaget och vad som skickats.
-    @ObservedObject private var coach = CoachModell.shared
+    /// BESLUT B128. Dagboken: kvällens taggar och morgonens skattning.
+    @ObservedObject private var dagbok = DagbokModell.shared
     @State private var importing = false
     /// PLAN.md A3. Reglaget "Whoop-appen är borta": av som förval.
     @AppStorage(Recorder.utanWhoopKey) private var utanWhoop = false
@@ -47,11 +47,9 @@ struct DataView: View {
             onUtanWhoop: { (på: Bool) -> Void in if på { recorder.considerAutoFetch(force: true) } },
             kondition: kondition.lager, skattning: kondition.skattning,
             onWhoopTal: { (dag: Int, värde: Double) -> Void in kondition.skrivAv(dag: dag, värde: värde) },
-            coach: coach.läge,
-            onCoachKoppla: { () -> Void in coach.koppla(UIPasteboard.general.string ?? "") },
-            onCoachPå: { (på: Bool) -> Void in coach.sätt(på: på) },
-            onCoachSkicka: { () -> Void in coach.synka(tvinga: true) },
-            onCoachFrån: { () -> Void in coach.kopplaFrån() }
+            dagbok: dagbok.låst ? nil : dagbok.dagbok,
+            onKväll: { dagbok.öppnaKväll() },
+            onMorgon: { dagbok.öppnaMorgon() }
         )
         .onAppear { recorder.refresh() }
         .fileImporter(
@@ -120,12 +118,10 @@ struct DataScreen: View {
     var kondition: FitnessStore?
     var skattning: PassiveFitness.Outcome?
     var onWhoopTal: (Int, Double) -> Void = { _, _ in }
-    /// BESLUT B127. Coachen: läget (`nil` ritar ingen sektion) och knapparna.
-    var coach: CoachModell.Läge?
-    var onCoachKoppla: () -> Void = {}
-    var onCoachPå: (Bool) -> Void = { _ in }
-    var onCoachSkicka: () -> Void = {}
-    var onCoachFrån: () -> Void = {}
+    /// BESLUT B128 · METOD M74. Dagboken och vägen till kvällens blad och morgonens fråga. `nil` (förval) döljer sektionen.
+    var dagbok: Journal?
+    var onKväll: () -> Void = {}
+    var onMorgon: () -> Void = {}
 
     /// METOD M28. Nätterna ur K18, för kontrollen.
     private var k18Nights: [NightSummary] {
@@ -145,10 +141,9 @@ struct DataScreen: View {
                                  onWhoopTal: onWhoopTal)
             }
 
-            // BESLUT B127. Coachen: det enda Idunn skickar av sig själv, och bara sammanfattningar.
-            if let coach {
-                CoachSektion(läge: coach, onKoppla: onCoachKoppla, onPå: onCoachPå, onSkicka: onCoachSkicka,
-                             onFrån: onCoachFrån)
+            // BESLUT B128. Dagboken: hur mycket som är loggat, och vägen till att ändra ett svar.
+            if let dagbok {
+                DagbokSektion(dagbok: dagbok, onKväll: onKväll, onMorgon: onMorgon)
             }
 
             Section {
@@ -298,73 +293,6 @@ struct DataScreen: View {
                 MarkMenu(lastLabel: lastMarker, count: markerCount, onMark: onMark)
             }
         }
-    }
-}
-
-/// BESLUT B127 · METOD M73. Coachen på Data: innan telefonen är kopplad en knapp som klistrar in kopplingen från
-/// Claude; sedan reglaget, när det senast skickades och knapparna Skicka nu och Koppla från. Tar läget som värde, så
-/// att provet kan rita den.
-struct CoachSektion: View {
-    let läge: CoachModell.Läge
-    var onKoppla: () -> Void = {}
-    var onPå: (Bool) -> Void = { _ in }
-    var onSkicka: () -> Void = {}
-    var onFrån: () -> Void = {}
-
-    var body: some View {
-        Section {
-            if läge.kopplad {
-                Toggle(isOn: Binding(get: { () -> Bool in läge.på }, set: { (ny: Bool) -> Void in onPå(ny) })) {
-                    Label("Skicka till coachen", systemImage: "paperplane")
-                }
-                HStack {
-                    Text(status)
-                    Spacer()
-                    if läge.arbetar { ProgressView() }
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                Button("Skicka nu") { onSkicka() }
-                    .disabled(läge.arbetar)
-                Button("Koppla från", role: .destructive) { onFrån() }
-                    .disabled(läge.arbetar)
-            } else {
-                Button {
-                    onKoppla()
-                } label: {
-                    HStack {
-                        Label("Klistra in kopplingen", systemImage: "doc.on.clipboard")
-                        Spacer()
-                        if läge.arbetar { ProgressView() }
-                    }
-                }
-                .disabled(läge.arbetar)
-            }
-            if let fel = läge.fel {
-                Text(fel)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-            }
-        } header: {
-            Label("Coachen", systemImage: "figure.run")
-        } footer: {
-            Text(fot)
-        }
-    }
-
-    private var fot: String {
-        if läge.kopplad {
-            return "Idunn skickar sammanfattningen av nätterna, passen och profilen till din egen databas, så att "
-                + "Claude kan läsa den. Aldrig slag för slag, aldrig var du varit och aldrig ljud."
-        }
-        return "Be Claude om en koppling, kopiera texten och tryck här. Sedan skickar Idunn sammanfattningarna av sig själv."
-    }
-
-    private var status: String {
-        if läge.arbetar { return "Skickar" }
-        guard let senast = läge.senast else { return "Inget skickat än" }
-        return "Senast skickat " + senast.formatted(date: .abbreviated, time: .shortened)
-            + " · \(läge.skickade) sparade"
     }
 }
 
