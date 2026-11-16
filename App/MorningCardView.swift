@@ -371,8 +371,9 @@ struct Morgonläge: Equatable {
 
     var bandText: String { band == .pågår ? "Söker bandet" : "Bandet" }
 
+    /// Pågår eller väntar: "Hämtar natten från bandet". Klart: "Hämtat från bandet". Med klockslaget för nyaste posten.
     var hämtarText: String {
-        var t: String = "Hämtar natten från bandet"
+        var t: String = hämtar == .klart ? "Hämtat från bandet" : "Hämtar natten från bandet"
         if let d = dataTill { t += " · data till " + Fmt.clock(date: d) }
         return t
     }
@@ -382,9 +383,8 @@ struct Morgonläge: Equatable {
         return "hämtat till " + Fmt.clock(date: d)
     }
 
-    var ingenNattText: String {
-        "Ingen natt för idag än" + (dataTill.map { (d: Date) -> String in " · data till " + Fmt.clock(date: d) } ?? "")
-    }
+    /// Klockslaget står redan på hämtningens rad.
+    var ingenNattText: String { "Ingen natt för idag än" }
 
     /// Läget ur det telefonen vet. Hämtningen är klar när den inte pågår och data finns.
     static func nu(ansluten: Bool, hämtar: Bool, räknar: Bool, dataTill: Date?, hämtatTill: Date?) -> Morgonläge {

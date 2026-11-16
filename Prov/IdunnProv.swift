@@ -295,7 +295,8 @@ final class IdunnProv: XCTestCase {
         XCTAssertFalse(väntar.ingenNatt)
         XCTAssertFalse(räknar.ingenNatt)
         XCTAssertTrue(ingen.ingenNatt)
-        XCTAssertEqual(ingen.ingenNattText, "Ingen natt för idag än · data till 06:40")
+        XCTAssertEqual(ingen.ingenNattText, "Ingen natt för idag än")
+        XCTAssertEqual(ingen.hämtarText, "Hämtat från bandet · data till 06:40")
         XCTAssertEqual(Morgonläge.nu(ansluten: true, hämtar: false, räknar: false, dataTill: nil,
                                      hämtatTill: nil).ingenNattText, "Ingen natt för idag än")
         for (läge, namn) in [(väntar, "skarm-morgon-vantar"), (räknar, "skarm-morgon-raknar"),
