@@ -4,8 +4,9 @@ import SwiftUI
 /// släppa, och sedan en ring som snurrar överst medan omläsningen pågår. Rullningen är en vanlig `ScrollView`;
 /// utan `ladda` (förhandsvisningen) finns inget att dra i.
 ///
-/// `laddar` är arbetet som pågår hos den som äger datan. Ringen står kvar minst `minst` sekunder, så att den hinner
-/// synas, och högst `längst`: en hämtning från bandet kan ta minuter, och hur långt den kommit står på sidan.
+/// `laddar` är arbetet som pågår hos den som äger datan. Ringen är en kort kvittens på draget (BESLUT B139): minst
+/// `minst` sekunder, så att den hinner synas, och högst `längst`. En hämtning från bandet kan ta minuter, och hur långt
+/// den kommit står på sidan, inte i ringen.
 struct DraNer<Innehåll: View>: View {
     let laddar: Bool
     let ladda: (() -> Void)?
@@ -21,8 +22,9 @@ struct DraNer<Innehåll: View>: View {
     static var tröskel: CGFloat { 76 }
     /// Radens höjd medan ringen snurrar.
     static var rad: CGFloat { 56 }
-    static var minst: Double { 0.9 }
-    static var längst: Double { 12 }
+    // BESLUT B139. Kort: snurrade ringen så länge hämtningen pågick stod den kvar i tolv sekunder.
+    static var minst: Double { 0.8 }
+    static var längst: Double { 1.5 }
 
     /// Hur långt innehållet är draget under sin överkant (0 i vila).
     @State private var drag: CGFloat = 0
