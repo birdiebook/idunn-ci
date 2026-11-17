@@ -252,10 +252,6 @@ struct NightMetricStack: View {
                 .padding(.horizontal, 14)
             tecken(band.isEmpty ? [(Tema.accent, "i natt")] : [(Tema.accent, "i natt"), (Tema.band, "din vanliga natt")])
             if !stages.isEmpty { StadieTecken().padding(.horizontal, 14).font(.system(size: 10)) }
-            Text("Högre i djupsömn, lägre i REM och vid uppvak.")
-                .font(.system(size: 13))
-                .foregroundStyle(Tema.dim)
-                .padding(.horizontal, 14)
         }
     }
 
