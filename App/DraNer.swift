@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// BESLUT B136. Dra ner för att läsa om, i Idunns form: en pil som följer fingret och vänder när det räcker att
-/// släppa, och sedan en ring som snurrar överst medan omläsningen pågår. Rullningen är en vanlig `ScrollView`;
+/// BESLUT B136 · BESLUT B140. Dra ner för att läsa om, i Idunns form: en kula som andas in medan fingret drar och
+/// fylls när det räcker att släppa, och som andas ut i tre ringar efter släppet. Rullningen är en vanlig `ScrollView`;
 /// utan `ladda` (förhandsvisningen) finns inget att dra i.
 ///
-/// `laddar` är arbetet som pågår hos den som äger datan. Ringen är en kort kvittens på draget (BESLUT B139): minst
-/// `minst` sekunder, så att den hinner synas, och högst `längst`. En hämtning från bandet kan ta minuter, och hur långt
-/// den kommit står på sidan, inte i ringen.
+/// `laddar` är arbetet som pågår hos den som äger datan. Utandningen är en kort kvittens på draget (BESLUT B139):
+/// minst `minst` sekunder, så att den hinner andas ut, och högst `längst`. En hämtning från bandet kan ta minuter, och
+/// hur långt den kommit står på sidan, inte i kulan.
 struct DraNer<Innehåll: View>: View {
     let laddar: Bool
     let ladda: (() -> Void)?
@@ -20,10 +20,10 @@ struct DraNer<Innehåll: View>: View {
 
     /// Hur långt sidan måste dras för att släppet ska läsa om, i punkter.
     static var tröskel: CGFloat { 76 }
-    /// Radens höjd medan ringen snurrar.
-    static var rad: CGFloat { 56 }
-    // BESLUT B139. Kort: snurrade ringen så länge hämtningen pågick stod den kvar i tolv sekunder.
-    static var minst: Double { 0.8 }
+    /// Luckans höjd medan kulan andas ut.
+    static var rad: CGFloat { 64 }
+    // BESLUT B139 · BESLUT B140. Kort: minst en utandning (`Andning.utandning`), högst 1,5 s.
+    static var minst: Double { Andning.utandning }
     static var längst: Double { 1.5 }
 
     /// Hur långt innehållet är draget under sin överkant (0 i vila).
@@ -31,8 +31,10 @@ struct DraNer<Innehåll: View>: View {
     @State private var fingret = false
     /// Fingret har dragit förbi tröskeln och inte tillbaka.
     @State private var nådd = false
-    /// Ringen visas: från släppet tills omläsningen är klar.
+    /// Utandningen visas: från släppet tills kvittensen är slut.
     @State private var visar = false
+    /// När utandningen började.
+    @State private var släppt = Date.distantPast
     /// `laddar` som det är just nu, läsbart inifrån väntan.
     @State private var pågår = false
 
@@ -40,8 +42,7 @@ struct DraNer<Innehåll: View>: View {
         ScrollView {
             VStack(spacing: 0) {
                 if visar {
-                    Snurra()
-                        .frame(maxWidth: .infinity)
+                    Color.clear
                         .frame(height: Self.rad)
                         .transition(.opacity)
                 }
@@ -49,8 +50,8 @@ struct DraNer<Innehåll: View>: View {
             }
         }
         .overlay(alignment: .top) {
-            if ladda != nil, !visar, drag > 12 {
-                pil
+            if ladda != nil, visar || drag > 2 {
+                luckan
             }
         }
         .onScrollGeometryChange(for: CGFloat.self) { (g: ScrollGeometry) -> CGFloat in
@@ -63,6 +64,7 @@ struct DraNer<Innehåll: View>: View {
             fingret = nu == .interacting
             if förr == .interacting, nu != .interacting {
                 if nådd, !visar, let ladda {
+                    släppt = Date()
                     withAnimation(.easeOut(duration: 0.2)) { visar = true }
                     ladda()
                 }
@@ -76,44 +78,70 @@ struct DraNer<Innehåll: View>: View {
             try? await Task.sleep(for: .seconds(Self.minst))
             var kvar: Double = Self.längst - Self.minst
             while pågår, kvar > 0, !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(0.3))
-                kvar -= 0.3
+                try? await Task.sleep(for: .seconds(0.1))
+                kvar -= 0.1
             }
-            withAnimation(.easeInOut(duration: 0.3)) { visar = false }
+            withAnimation(.easeInOut(duration: 0.25)) { visar = false }
         }
     }
 
-    /// Pilen i luckan ovanför innehållet: tonar in med draget och vänder uppåt när det räcker att släppa.
-    private var pil: some View {
-        let andel: Double = Double(min(1, drag / Self.tröskel))
-        return Image(systemName: "arrow.down")
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(nådd ? Tema.text : Tema.dim)
-            .rotationEffect(.degrees(nådd ? 180 : 0))
-            .animation(.spring(duration: 0.25), value: nådd)
-            .opacity(andel)
-            .frame(height: 24)
-            .offset(y: max(4, drag / 2 - 12))
+    /// Luckan ovanför innehållet: inandningen följer draget, utandningen sin klocka.
+    @ViewBuilder
+    private var luckan: some View {
+        if visar {
+            TimelineView(.animation) { tid in
+                let fas: Double = min(1, max(0, tid.date.timeIntervalSince(släppt) / Andning.utandning))
+                Andning(andel: 1, ut: fas)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: max(Self.rad, drag))
+            .clipped()
             .allowsHitTesting(false)
-            .accessibilityHidden(true)
+            .accessibilityLabel("Läser om")
+        } else {
+            Andning(andel: Double(min(1, drag / Self.tröskel)), ut: nil)
+                .frame(maxWidth: .infinity)
+                .frame(height: drag)
+                .clipped()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 }
 
-/// BESLUT B136. Ringen som snurrar medan Morgon läses om: en båge i Idunns accentfärg på ringarnas spår.
-private struct Snurra: View {
-    @State private var varv = false
+/// BESLUT B140. Kulan som andas: in medan fingret drar (`andel` 0–1), ut efter släppet (`ut` 0–1), med tre ringar som
+/// vågar ut. Mitt i luckan, i Idunns accentfärg.
+struct Andning: View {
+    let andel: Double
+    let ut: Double?
+
+    /// Utandningens längd i sekunder.
+    static var utandning: Double { 1.1 }
 
     var body: some View {
-        ZStack {
-            Circle().stroke(Tema.ringTrack, lineWidth: 3)
-            Circle()
-                .trim(from: 0, to: 0.28)
-                .stroke(Tema.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                .rotationEffect(.degrees(varv ? 360 : 0))
-                .animation(.linear(duration: 0.9).repeatForever(autoreverses: false), value: varv)
+        Canvas { (ctx: inout GraphicsContext, size: CGSize) in
+            let mitt: CGPoint = CGPoint(x: size.width / 2, y: size.height / 2)
+            let e: Double = 1 - pow(1 - min(1, max(0, andel)), 3)
+            var r: Double = 4 + 20 * e
+            if let fas = ut {
+                r = 24 + 8 * sin(fas * .pi) - 10 * fas * fas
+                for k in 0..<3 {
+                    let p: Double = min(1, max(0, fas * 1.4 - Double(k) * 0.18))
+                    guard p > 0 else { continue }
+                    let rr: Double = 24 + p * 46
+                    ctx.stroke(Path(ellipseIn: CGRect(x: mitt.x - rr, y: mitt.y - rr, width: 2 * rr, height: 2 * rr)),
+                               with: .color(Tema.accent.opacity(0.35 * (1 - p))), lineWidth: 1.2)
+                }
+            }
+            let sken: Double = r * 1.8
+            ctx.fill(Path(ellipseIn: CGRect(x: mitt.x - sken, y: mitt.y - sken, width: 2 * sken, height: 2 * sken)),
+                     with: .radialGradient(Gradient(colors: [Tema.accent.opacity(0.55), Tema.accent.opacity(0.18),
+                                                             Tema.accent.opacity(0)]),
+                                           center: mitt, startRadius: 0, endRadius: sken))
+            let kärna: Double = max(2, r * 0.42)
+            let full: Bool = andel >= 1 || ut != nil
+            ctx.fill(Path(ellipseIn: CGRect(x: mitt.x - kärna, y: mitt.y - kärna, width: 2 * kärna, height: 2 * kärna)),
+                     with: .color(Tema.accent.opacity(full ? 0.95 : 0.55)))
         }
-        .frame(width: 24, height: 24)
-        .onAppear { varv = true }
-        .accessibilityLabel("Läser om")
     }
 }
