@@ -51,11 +51,18 @@ public enum PassWeek {
     /// maxpuls: då räknas inga zoner).
     public static func summary(_ passes: [Pass], weekStart: Int, dayOf: (Pass) -> Int, load: (Pass) -> Double,
                                classify: ((Int) -> Int)?) -> Summary {
+        summary(passes, fromDay: weekStart, days: 7, dayOf: dayOf, load: load, classify: classify)
+    }
+
+    /// METOD M72 · METOD M78. Samma summa över `days` dagar från `fromDay` (en dag, en vecka eller en månad).
+    /// `weekStart` i svaret är `fromDay`.
+    public static func summary(_ passes: [Pass], fromDay weekStart: Int, days: Int, dayOf: (Pass) -> Int,
+                               load: (Pass) -> Double, classify: ((Int) -> Int)?) -> Summary {
         var ut = Summary(weekStart: weekStart)
         var perZon: [Int: TimeInterval] = [:]
         for p in passes where counts(p) {
             let dag = dayOf(p)
-            guard dag >= weekStart, dag < weekStart + 7 else { continue }
+            guard dag >= weekStart, dag < weekStart + days else { continue }
             ut.passes += 1
             ut.seconds += p.duration
             ut.meters += PassRoute.distance(p.track ?? [])

@@ -1,5 +1,6 @@
-// RITAR VECKAKORTET PÅ FLIKEN PASS TILL PNG (BESLUT B126, METOD M72): kortet "Den här veckan" med och utan maxpuls
-// (`vecka-kort`, `vecka-kort-utan-maxpuls`) och fliken Pass i vila med kortet ovanför listan (`vecka-lista`).
+// RITAR FLIKEN PASS I VILA OCH VECKANS SIDA TILL PNG (BESLUT B133, BESLUT B134, METOD M72, METOD M78): fliken med veckokortet
+// och raderna (`flik-pass`, `flik-pass-forslag`, `flik-pass-utan-maxpuls`), bladet Vad ska du göra? (`start-blad`) och
+// veckans sida i V, M, 6M och Å (`traning-v`, `traning-m`, `traning-6m`, `traning-ar`, `traning-utan-maxpuls`).
 //
 // DATAN ÄR PÅHITTAD: stoppade pass med en puls per sekund kring ett fast värde, och spår som slingor kring en påhittad
 // punkt. Riktiga pass och positioner får aldrig in här — CLAUDE.md §Dataregeln. Egna kopior av ritverktygen, som
@@ -64,7 +65,7 @@ final class IdunnProvVecka: XCTestCase {
 
     private func passen(idag: Int) -> [Pass] {
         let måndag: Int = PassWeek.weekStart(day: idag)
-        return [
+        let veckorna: [Pass] = [
             // Den här veckan, och ett bastupass som inte räknas.
             pass(dag: måndag, minuter: 40, bpm: 150, typ: .kondition, meter: 6_000),
             pass(dag: måndag + 2, minuter: 35, bpm: 120, typ: .styrka),
@@ -79,6 +80,37 @@ final class IdunnProvVecka: XCTestCase {
             pass(dag: måndag - 28, minuter: 40, bpm: 140, typ: .kondition),
             pass(dag: måndag - 26, minuter: 25, bpm: 120, typ: .styrka)
         ]
+        let alla: [Pass] = veckorna + steptest(dag: måndag - 4) + längreBak(idag: idag)
+        // Senaste först, som i appen.
+        return alla.sorted { (a: Pass, b: Pass) -> Bool in a.start > b.start }
+    }
+
+    /// Ett påhittat steptest på ett steg om 20 cm: tio minuter, pulsen 150.
+    private func steptest(dag: Int) -> [Pass] {
+        let start: Date = middag(dag: dag)
+        let prov: [PassSample] = (0...600).map { (s: Int) -> PassSample in
+            PassSample(t: start.addingTimeInterval(Double(s)), bpm: 150)
+        }
+        return [Pass(start: start, stop: start.addingTimeInterval(600), samples: prov, stepHeightCm: 20)]
+    }
+
+    /// Ett par pass per månad sex månader bakåt, och ett för åtta och ett för elva månader sedan.
+    private func längreBak(idag: Int) -> [Pass] {
+        var ut: [Pass] = []
+        for i in 1...6 {
+            ut.append(pass(dag: idag - 30 * i, minuter: 30 + 5 * i, bpm: 140, typ: .kondition))
+            ut.append(pass(dag: idag - 30 * i - 3, minuter: 25 + 3 * i, bpm: 118, typ: .styrka))
+        }
+        ut.append(pass(dag: idag - 240, minuter: 45, bpm: 135, typ: .kondition))
+        ut.append(pass(dag: idag - 330, minuter: 35, bpm: 125, typ: .styrka))
+        return ut
+    }
+
+    /// Ett förslag som slutar `timmarFöre` timmar före `nu`, `minuter` långt (som IdunnProvForslag).
+    private func förslag(kind: PassKind?, minuter: Int, timmarFöre: Int) -> PassDetection.Candidate {
+        let slutMinut: Int = Int(nu.timeIntervalSince1970) / 60 - timmarFöre * 60
+        return PassDetection.Candidate(startMinute: slutMinut - minuter + 1, endMinute: slutMinut, kind: kind,
+                                       elevatedMinutes: minuter, meanReserve: 0.55)
     }
 
     func testRitaVeckan() throws {
@@ -89,10 +121,27 @@ final class IdunnProvVecka: XCTestCase {
         XCTAssertEqual(med.current.passes, 2, "bastun räknas inte")
         XCTAssertTrue(med.hasTraining)
 
-        try fånga(sida(VeckaKort(oversikt: med, harMaxpuls: true)), namn: "vecka-kort", höjd: 900)
-        try fånga(sida(VeckaKort(oversikt: utan, harMaxpuls: false)), namn: "vecka-kort-utan-maxpuls", höjd: 900)
+        let bastu: PassDetection.Candidate = förslag(kind: .bastu, minuter: 22, timmarFöre: 3)
+        let utanTyp: PassDetection.Candidate = förslag(kind: nil, minuter: 41, timmarFöre: 26)
+
         try fånga(PassScreen(phase: .idle, pass: nil, now: nu, saved: alla, vecka: med, veckaMedMaxpuls: true),
-                  namn: "vecka-lista", höjd: 1_700)
+                  namn: "flik-pass", höjd: 1_500)
+        try fånga(PassScreen(phase: .idle, pass: nil, now: nu, saved: alla, förslag: [bastu, utanTyp],
+                             vecka: med, veckaMedMaxpuls: true),
+                  namn: "flik-pass-forslag", höjd: 1_700)
+        try fånga(PassScreen(phase: .idle, pass: nil, now: nu, saved: alla, vecka: utan, veckaMedMaxpuls: false),
+                  namn: "flik-pass-utan-maxpuls", höjd: 1_500)
+        try fånga(StartBlad(starta: { (_: StartBlad.Val) -> Void in }).background(Tema.card),
+                  namn: "start-blad", höjd: 500)
+
+        let perioder: [(PassPeriod, String)] = [(.week, "traning-v"), (.month, "traning-m"),
+                                                (.halfYear, "traning-6m"), (.year, "traning-ar")]
+        for (period, namn) in perioder {
+            try fånga(NavigationStack { TraningSida(pass: alla, maxpuls: maxPuls, idag: idag, period: period) },
+                      namn: namn, höjd: 1_100)
+        }
+        try fånga(NavigationStack { TraningSida(pass: alla, maxpuls: nil, idag: idag, period: .month) },
+                  namn: "traning-utan-maxpuls", höjd: 1_100)
     }
 
     // MARK: Ritverktyget

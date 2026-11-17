@@ -132,6 +132,9 @@ struct PassScreen: View {
     @State private var valtFörslag: Förslagsval?
     @State private var steptestBlad = false
     @State private var konditionÖppen = false
+    @State private var startBlad = false
+    @State private var traningÖppen = false
+    @State private var visaAlla = false
 
     /// Egen init, så att `@State private` inte kan göra den osynlig för andra filer.
     init(phase: PassRecorder.Phase, pass: Pass?, now: Date, saved: [Pass], actions: PassActions = PassActions(),
@@ -167,7 +170,7 @@ struct PassScreen: View {
                                    stopp: actions.stop)
                 } else {
                     ScrollView {
-                        VStack(spacing: 20) {
+                        VStack(spacing: vila ? 14 : 20) {
                             switch phase {
                             case .idle, .done:
                                 restView
@@ -180,15 +183,42 @@ struct PassScreen: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                     }
+                    .background(vila ? Tema.bg : Color.clear)
+                    // BESLUT B133. Start ligger fast ovanför flikarna och öppnar bladet Vad ska du göra?
+                    .safeAreaInset(edge: .bottom) {
+                        if vila {
+                            Button { startBlad = true } label: {
+                                Text("Starta pass")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Tema.bg)
+                                    .frame(maxWidth: .infinity, minHeight: 52)
+                                    .background(RoundedRectangle(cornerRadius: 18).fill(Tema.text))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Starta pass")
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 8)
+                            .frame(maxWidth: .infinity)
+                            .background(Tema.bg)
+                        }
+                    }
                 }
             }
             .navigationTitle("Pass")
             .navigationBarTitleDisplayMode(.inline)
+            // BESLUT B133. I vila har fliken ett eget huvud; under ett pass och efteråt står rubriken kvar.
+            .toolbar(vila ? .hidden : .automatic, for: .navigationBar)
             .navigationDestination(item: $openedID) { id in
                 if let p = saved.first(where: { $0.id == id }) {
                     PassDetail(pass: p, actions: actions, maxPulse: PassLoad.maxPulse(from: saved),
                                konditionMaxpuls: kondition.maxpuls?.bpm, close: { openedID = nil })
                 }
+            }
+            // BESLUT B134. Veckokortet öppnar veckans sida.
+            .navigationDestination(isPresented: $traningÖppen) {
+                TraningSida(pass: saved,
+                            maxpuls: kondition.maxpuls?.bpm ?? PassLoad.maxPulse(from: saved),
+                            idag: KonditionModell.idag(nu: now))
             }
             // BESLUT B110. Kortet Kondition öppnar skärmen med referensen och mätningarna.
             .navigationDestination(isPresented: $konditionÖppen) {
@@ -197,6 +227,20 @@ struct PassScreen: View {
                                    referens: kondition.referens, tempopuls: kondition.tempopuls)
                 }
             }
+        }
+        // BESLUT B133. Bladet Vad ska du göra?
+        .sheet(isPresented: $startBlad) {
+            StartBlad(starta: { (v: StartBlad.Val) -> Void in
+                startBlad = false
+                switch v {
+                case .ute:
+                    actions.startUte()
+                case .inne:
+                    actions.start()
+                case .steptest:
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { steptestBlad = true }
+                }
+            })
         }
         // BESLUT B110 · METOD M62. Bladet före steptestet.
         .sheet(isPresented: $steptestBlad) {
@@ -228,98 +272,65 @@ struct PassScreen: View {
 
     // MARK: Vila
 
+    private var vila: Bool { phase == .idle || phase == .done }
+
+    private var passIdag: Int { KonditionModell.idag(nu: now) }
+
     private var restView: some View {
-        VStack(spacing: 24) {
-            // BESLUT B110. Konditionen som ett kort överst när ett tal finns.
+        VStack(spacing: 14) {
+            PassHuvud(idag: passIdag,
+                      ute: actions.startUte,
+                      steptest: { steptestBlad = true })
+
+            // BESLUT B126 · BESLUT B133. Veckan hittills i två rutor; hela kortet öppnar veckans sida.
+            if let v = vecka, v.hasTraining {
+                VeckaRutor(oversikt: v, harMaxpuls: veckaMedMaxpuls, öppna: { traningÖppen = true })
+            }
+
+            // BESLUT B110. Konditionen som ett kort när ett tal finns.
             if let v = kondition.visat {
                 KonditionKort(visat: v, öppna: { konditionÖppen = true })
             }
 
-            Button(action: actions.start) {
-                VStack(spacing: 8) {
-                    Image(systemName: "heart.fill").font(.system(size: 44))
-                    Text("Start").font(.title.weight(.semibold))
-                }
-                .foregroundStyle(.white)
-                .frame(width: 180, height: 180)
-                .background(Circle().fill(Tema.red))
-            }
-            .buttonStyle(.plain)
-            .padding(.top, kondition.visat == nil ? 24 : 0)
-            .accessibilityLabel("Starta pass")
-
-            // BESLUT B111. Raden under Start: två lugna plattor, lika breda, med en rad om vad de gör. Den röda Start är det
-            // enda som ropar.
-            HStack(spacing: 12) {
-                Button(action: actions.startUte) {
-                    platta("figure.run", "Ute", "med karta")
-                }
-                .buttonStyle(Tryckyta())
-                .accessibilityLabel("Starta pass ute")
-
-                // BESLUT B110 · METOD M62. Steptest: appen leder testet.
-                Button { steptestBlad = true } label: {
-                    platta("figure.stairs", "Steptest", "10 minuter")
-                }
-                .buttonStyle(Tryckyta())
-                .accessibilityLabel("Starta steptest")
-            }
-
-            // BESLUT B121 · METOD M69. Förslag ur bandets historik, före de sparade passen.
+            // BESLUT B121 · METOD M69 · BESLUT B133. Förslag ur bandets historik som ett streckat kort.
             if !förslag.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Förslag").font(.headline)
-                    Text("Hittade i bandets historik. Lägg till dem du vill ha kvar.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .padding(.bottom, 4)
-                    ForEach(förslag, id: \.startMinute) { (f: PassDetection.Candidate) in
-                        Button { valtFörslag = Förslagsval(id: f.startMinute, förslag: f) } label: {
-                            FörslagRad(förslag: f, nu: now)
-                        }
-                        .buttonStyle(.plain)
-                        if f.startMinute != förslag.last?.startMinute { Divider() }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            // BESLUT B126 · METOD M72. Veckan hittills, före de sparade passen.
-            if let v = vecka, v.hasTraining {
-                VeckaKort(oversikt: v, harMaxpuls: veckaMedMaxpuls)
+                PassForslagKort(förslag: förslag, nu: now,
+                                läggTill: { (f: PassDetection.Candidate) -> Void in
+                                    if let typ = f.kind {
+                                        actions.läggTillFörslag(f, typ)
+                                    } else {
+                                        valtFörslag = Förslagsval(id: f.startMinute, förslag: f)
+                                    }
+                                },
+                                inteEtt: { (f: PassDetection.Candidate) -> Void in actions.taBortFörslag(f) })
             }
 
             if !saved.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(saved) { p in
-                        Button { openedID = p.id } label: { PassRow(pass: p, maxpuls: kondition.maxpuls?.bpm) }
-                            .buttonStyle(.plain)
-                        if p.id != saved.last?.id { Divider() }
+                let synliga: [Pass] = visaAlla ? saved : Array(saved.prefix(5))
+                let mp: Double? = kondition.maxpuls?.bpm ?? PassLoad.maxPulse(from: saved)
+                HStack {
+                    Text("Senaste passen").font(.headline).foregroundStyle(Tema.text)
+                    Spacer(minLength: 0)
+                    if saved.count > 5 {
+                        Button { visaAlla.toggle() } label: {
+                            Text(visaAlla ? "Färre" : "Alla")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Tema.dim)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 4)
+                VStack(spacing: 8) {
+                    ForEach(synliga) { (p: Pass) in
+                        Button { openedID = p.id } label: {
+                            PassRow(pass: p, maxpuls: kondition.maxpuls?.bpm, zonMaxpuls: mp, idag: passIdag)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
         }
-    }
-
-    /// BESLUT B111. En platta i raden under Start: ikonen i accent, namnet i fetstil och en rad om vad knappen gör.
-    private func platta(_ symbol: String, _ namn: String, _ rad: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.title2)
-                .frame(width: 28)
-                .foregroundStyle(Tema.accent)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(namn).font(.headline).foregroundStyle(Tema.text)
-                Text(rad).font(.caption).foregroundStyle(Tema.dim)
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-        .background(Tema.card, in: RoundedRectangle(cornerRadius: 16))
-        .contentShape(Rectangle())
     }
 
     // MARK: Pågår
@@ -466,11 +477,15 @@ struct PassScreen: View {
 
 // MARK: - Sparade pass
 
-/// En rad i listan över de senaste passen: typ, datum, längd, snitt och högsta.
+/// BESLUT B133. En rad i listan över de senaste passen: ikon, titel, dag, zonremsa, tid och snittpuls.
 private struct PassRow: View {
     let pass: Pass
     /// BESLUT B111. Maxpulsen, för konditionstalet i ett steptest; `nil` ger snittet som för andra pass.
     var maxpuls: Double? = nil
+    /// BESLUT B133. Maxpulsen för zonremsan; `nil` ger ingen remsa.
+    var zonMaxpuls: Double? = nil
+    /// Dagen i dag (dagar sedan 1970-01-01), för "Idag", "Igår" och veckodagen.
+    var idag: Int = KonditionModell.idag()
 
     /// Konditionen ur ett steptest, avrundad; `nil` för andra pass, utan maxpuls och när testet var för kort.
     private var konditionstal: Int? {
@@ -478,43 +493,61 @@ private struct PassRow: View {
         return Int(r.value.rounded())
     }
 
+    private var titel: String {
+        if pass.isStepTest { return "Steptest" }
+        return (pass.kind?.displayName ?? "Pass") + (pass.isOutdoor ? " ute" : "")
+    }
+
+    private var undertext: String {
+        var t: String = PassFlikText.veckodag(KonditionModell.dag(för: pass), idag: idag)
+        if pass.isOutdoor, let sträcka = PassRuttFormat.distanceText(pass) { t += " · " + sträcka }
+        return t
+    }
+
+    private var zoner: [PassZones.Share] {
+        guard let m = zonMaxpuls, !pass.isStepTest else { return [] }
+        return PassZones.time(pass.activeSamples, classify: { (bpm: Int) -> Int in PassLoad.zone(bpm: bpm, maxPulse: m) })
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: pass.isStepTest ? "figure.stairs" : PassFormat.symbol(pass.kind))
-                .font(.title2)
-                .frame(width: 32)
-                .foregroundStyle(Tema.dim)
+            PassIkonruta(symbol: pass.isStepTest ? "figure.stairs" : PassFormat.symbol(pass.kind))
             VStack(alignment: .leading, spacing: 2) {
-                Text(pass.isStepTest ? "Steptest" : (pass.kind?.displayName ?? "Pass")).font(.headline)
-                Text(pass.start, format: .dateTime.day().month(.abbreviated).hour().minute())
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                // BESLUT B110. Ett pass ute visar sträckan.
-                if let sträcka = PassRuttFormat.distanceText(pass) {
-                    Text(sträcka)
-                        .font(Font.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.secondary)
+                Text(titel)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Tema.text)
+                Text(undertext)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Tema.dim)
+                if zonMaxpuls != nil && !pass.isStepTest {
+                    ZonRemsa(zoner: zoner, höjd: 4)
+                        .frame(width: 84)
+                        .padding(.top, 3)
                 }
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 2) {
-                Text(PassFormat.short(pass.duration)).font(.subheadline)
                 if let tal = konditionstal {
-                    Text("kondition \(tal)")
-                        .font(Font.subheadline.weight(.semibold).monospacedDigit())
+                    Text(String(tal))
+                        .font(Font.system(size: 15, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(Tema.text)
+                    Text("kondition").font(.system(size: 12)).foregroundStyle(Tema.dim)
                 } else {
-                    HStack(spacing: 6) {
-                        Text(PassFormat.bpm(pass.averageBpm))
-                        Image(systemName: "arrow.up").font(.caption2)
-                        Text(PassFormat.bpm(pass.maxBpm))
-                    }
-                    .font(Font.subheadline.weight(.semibold).monospacedDigit())
+                    Text("\(Int((pass.duration / 60).rounded())) min")
+                        .font(Font.system(size: 15, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(Tema.text)
+                    Text("snitt " + PassFormat.bpm(pass.averageBpm))
+                        .font(Font.system(size: 12).monospacedDigit())
+                        .foregroundStyle(Tema.dim)
                 }
             }
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Tema.card))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.06), lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 18))
     }
 }
 
