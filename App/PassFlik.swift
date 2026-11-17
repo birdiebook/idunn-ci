@@ -484,7 +484,7 @@ struct TraningSida: View {
                     ForEach(med, id: \.zone) { (z: PassZones.Share) in
                         HStack(spacing: 5) {
                             Circle().fill(PassZonTrappa.color(z.zone)).frame(width: 8, height: 8)
-                            Text(PassZonText.namn(z.zone) + " " + PassZonText.tid(z.seconds))
+                            Text(PassZonText.namn(z.zone) + " " + PassFlikText.timmar(z.seconds))
                                 .font(.system(size: 12))
                                 .foregroundStyle(Tema.dim)
                                 .lineLimit(1)
