@@ -746,15 +746,18 @@ struct PassDetail: View {
             .padding(.vertical, 12)
         }
         .background(Tema.bg)
+        // BESLUT B133. Ingen accentfärg: knapparna i fältet är vita.
+        .tint(Tema.text)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                exportKnapp
+                exportKnapp.tint(Tema.text)
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button(role: .destructive) { confirmDelete = true } label: {
+                Button { confirmDelete = true } label: {
                     Label("Ta bort", systemImage: "trash")
                 }
+                .tint(Tema.text)
             }
         }
         .confirmationDialog("Ta bort passet?", isPresented: $confirmDelete, titleVisibility: .visible) {

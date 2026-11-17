@@ -191,7 +191,7 @@ struct PassTreTal: View {
     let pass: Pass
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 16) {
             tal(PassFormat.short(pass.duration), "tid")
             tal(PassFormat.bpm(pass.averageBpm), "snittpuls")
             tal(PassFormat.bpm(pass.maxBpm), "högst")
@@ -201,12 +201,16 @@ struct PassTreTal: View {
     private func tal(_ värde: String, _ etikett: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(värde)
-                .font(.system(size: 40, weight: .light))
+                .font(.system(size: 32, weight: .light))
                 .monospacedDigit()
                 .foregroundStyle(Tema.text)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.5)
                 .lineLimit(1)
-            Text(etikett).font(.system(size: 12)).foregroundStyle(Tema.dim)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(etikett)
+                .font(.system(size: 12))
+                .foregroundStyle(Tema.dim)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
@@ -262,7 +266,7 @@ struct PassZonKort: View {
                     ForEach(med, id: \.zone) { (z: PassZones.Share) in
                         HStack(spacing: 8) {
                             Circle().fill(PassZonTrappa.color(z.zone)).frame(width: 8, height: 8)
-                            Text("Zon \(z.zone)")
+                            Text(PassZonText.namn(z.zone))
                                 .font(.system(size: 15))
                                 .foregroundStyle(Tema.text)
                             Spacer(minLength: 8)

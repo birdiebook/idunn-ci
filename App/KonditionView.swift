@@ -431,9 +431,11 @@ struct KonditionSkärm: View {
                 }
             }
             .chartYScale(domain: pulsDomän)
+            // BESLUT B138. Diagrammets egen förklaring ritas i systemets blå; den står i ord under i stället.
+            .chartLegend(.hidden)
             .frame(height: 200)
             .accessibilityLabel("Puls på samma nivå över tid")
-            Text("Lägre puls på samma nivå betyder bättre kondition.")
+            Text("Nivå 1 är den ljusaste linjen, sedan nivå 2 och 3. Lägre puls på samma nivå betyder bättre kondition.")
                 .font(.footnote)
                 .foregroundStyle(Tema.dim)
         }

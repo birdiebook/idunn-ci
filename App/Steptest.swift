@@ -201,7 +201,7 @@ struct SteptestResultat: View {
                 VStack(spacing: 2) {
                     Text("Kondition").font(.subheadline).foregroundStyle(.secondary)
                     Text(KonditionText.tal(r.value))
-                        .font(.system(size: 56, weight: .bold, design: .rounded))
+                        .font(.system(size: 56, weight: .light))
                         .monospacedDigit()
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
@@ -231,8 +231,8 @@ struct SteptestResultat: View {
                     rad(String(n.index + 1), String(Int(n.cadence)), PassFormat.bpm(n.pulse), dämpad: false)
                 }
             }
-            .padding(14)
-            .background(Tema.card, in: RoundedRectangle(cornerRadius: 16))
+            .padding(16)
+            .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
         }
     }
 
@@ -242,7 +242,7 @@ struct SteptestResultat: View {
             Text(b).frame(maxWidth: .infinity)
             Text(c).frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .font(dämpad ? Font.caption : Font.title3.weight(.semibold).monospacedDigit())
-        .foregroundStyle(dämpad ? Color.secondary : Color.primary)
+        .font(dämpad ? Font.caption : Font.title3.weight(.light).monospacedDigit())
+        .foregroundStyle(dämpad ? Tema.dim : Tema.text)
     }
 }

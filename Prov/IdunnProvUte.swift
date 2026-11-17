@@ -94,7 +94,7 @@ final class IdunnProvUte: XCTestCase {
         }
         XCTAssertGreaterThan(Set(delar.map { $0.klass }).count, 2, "flera zoner syns på rutten")
         try fånga(NavigationStack { PassDetail(pass: p, maxPulse: maxPuls, zonMaxpuls: maxPuls) },
-                  namn: "ute-pass", höjd: 1_500)
+                  namn: "ute-pass", höjd: 1_250)
     }
 
     // MARK: Efteråt (BESLUT B138)
