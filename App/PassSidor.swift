@@ -481,12 +481,17 @@ struct PassKartSida: View {
             }
         }
         .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll, showsTraffic: false))
+        // BESLUT B135. Kartans eget märke och länk ska synas hela: kartans säkra yta slutar ovanför kortet.
+        .safeAreaPadding(.bottom, Self.korthöjd)
         .environment(\.colorScheme, .dark)
         .frame(maxWidth: .infinity, minHeight: 460)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .overlay(alignment: .bottom) { tal }
         .accessibilityLabel("Karta över rutten")
     }
+
+    /// BESLUT B135. Kortets höjd med marginalen under det; kartans märke läggs ovanför.
+    static let korthöjd: CGFloat = 96
 
     private var tal: some View {
         let kilometer: String = PassRuttFormat.km(PassRoute.distance(spår)).replacingOccurrences(of: " km", with: "")
