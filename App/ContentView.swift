@@ -55,6 +55,8 @@ struct ContentView: View {
                 .tag(2)
         }
         .environment(\.öppnaVäcktid, { (val: Väcktidsval) in väcktidsval = val })
+        // BESLUT B136. Ingen rullningslist i någon vy: listen till höger störde mer än den visade.
+        .scrollIndicators(.hidden)
         .sheet(item: $väcktidsval) { (val: Väcktidsval) in
             // BESLUT B102 · BESLUT B103. Bladet ger hela det nya schemat, och reglaget för påminnelsen före läggdags.
             VäcktidBlad(val: val, påminnelse: påminnelse.på, nekad: påminnelse.nekad,
@@ -68,7 +70,7 @@ struct ContentView: View {
                 .modifier(IInnehålletsHöjd())
                 .presentationBackground(Tema.bg)
         }
-        // BESLUT B130 · METOD M75. Kvällens taggar: frågas när appen öppnas på kvällen, tills kvällen är besvarad.
+        // BESLUT B130 · BESLUT B136 · METOD M75. Kvällens taggar: bladet öppnas bara från Data, aldrig av sig självt.
         .sheet(item: kvällsfråga) { (k: Kvällsfråga) in
             KvällVy(valda: dagbok.dagbok.evening(k.dag)?.tags ?? [],
                     spara: { (taggar: [EveningTag]) -> Void in dagbok.svara(kväll: k.dag, taggar: taggar) },
@@ -76,7 +78,7 @@ struct ContentView: View {
                 .modifier(IInnehålletsHöjd())
                 .presentationBackground(Tema.bg)
         }
-        // BESLUT B130 · METOD M75. Morgonens skattning ges innan nattens tal har synts: frågan täcker hela appen.
+        // BESLUT B130 · BESLUT B136 · METOD M75. Morgonens skattning: frågan öppnas bara från Data, aldrig av sig själv.
         .overlay {
             if let dag = morgonfråga {
                 MorgonfrågaVy(vald: dagbok.dagbok.morning(dag)?.rested,
@@ -140,8 +142,6 @@ struct ContentView: View {
                 recorder.refresh()
                 // BESLUT B47. Ljudet startar när appen öppnas kl 20–04 och slutar när den öppnas efter 05.
                 SoundListener.shared.appBecameActive()
-                // BESLUT B130. Dagboken frågar när appen kommer fram: skattningen på morgonen, taggarna på kvällen.
-                dagbok.appenÖppnades()
             }
         }
         .onAppear { SoundListener.shared.appBecameActive() }

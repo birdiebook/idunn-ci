@@ -35,7 +35,10 @@ struct MorningCardView: View {
                                                 lacksLayers: utanLager),
                               huvudtal: behov.huvudtal,
                               band: Bandstatus(batteri: recorder.battery, ansluten: recorder.link == .connected),
-                              idag: Self.idag(now: Date()), läge: Self.läge(recorder, now: Date()))
+                              idag: Self.idag(now: Date()), läge: Self.läge(recorder, now: Date()),
+                              // BESLUT B136. Dra ner på Morgon: samma omläsning som när appen kommer fram.
+                              laddar: recorder.fetching || recorder.computingNights,
+                              laddaOm: { recorder.refresh() })
         }
         .onChange(of: recorder.summaries, initial: true) { dagar = Self.days(summaries: recorder.summaries) }
         .task(id: senasteNatt) {
@@ -190,12 +193,16 @@ struct MorningCardScreen: View {
     var idag: WakeDay?
     /// BESLUT B125. Vad som pågår på den tomma sidan Idag (när dagens natt inte finns än).
     var läge: Morgonläge?
+    /// BESLUT B136. Dra ner för att läsa om: `laddar` håller snurran kvar, `laddaOm` startar. Utan `laddaOm`
+    /// (förhandsvisningen) finns inget att dra i.
+    var laddar: Bool = false
+    var laddaOm: (() -> Void)? = nil
     @State private var vald: WakeDay?
 
     init(days: [MorningCard.Day], summaries: [WakeDay: NightSummary] = [:], alert: ListenerAlert? = nil,
          start: WakeDay? = nil, showsData: Bool = true, bundles: [WakeDay: NightLoader.CurveBundle] = [:],
          huvudtal: Huvudtal = .tom, loadsCurves: Bool = true, band: Bandstatus = .okänd,
-         idag: WakeDay? = nil, läge: Morgonläge? = nil) {
+         idag: WakeDay? = nil, läge: Morgonläge? = nil, laddar: Bool = false, laddaOm: (() -> Void)? = nil) {
         self.days = days
         self.summaries = summaries
         self.alert = alert
@@ -206,6 +213,8 @@ struct MorningCardScreen: View {
         self.band = band
         self.idag = idag
         self.läge = läge
+        self.laddar = laddar
+        self.laddaOm = laddaOm
         _vald = State(initialValue: start)
     }
 
@@ -289,12 +298,15 @@ struct MorningCardScreen: View {
                         if let kort = days.first(where: { (k: MorningCard.Day) -> Bool in k.day == dag }) {
                             MorningPage(card: kort, summary: summaries[kort.day], preloaded: bundles[kort.day],
                                         alert: kort.day == senaste ? alert : nil, huvudtal: huvudtal,
-                                        load: loadsCurves)
+                                        load: loadsCurves, laddar: laddar, laddaOm: laddaOm)
                         } else {
-                            // BESLUT B125. Dagens sida utan natt: tom på tal, med stegen.
-                            IdagTomVy(läge: läge ?? Morgonläge.nu(ansluten: false, hämtar: false, räknar: false,
-                                                                  dataTill: nil, hämtatTill: nil),
-                                      alert: alert)
+                            // BESLUT B125 · BESLUT B136. Dagens sida utan natt: samma sida som en morgon, tom på tal,
+                            // med ett kort som säger vad som pågår.
+                            MorningPage(card: MorningCard.day(dag, idun: [:]), summary: nil, preloaded: nil,
+                                        alert: alert, huvudtal: huvudtal, load: false,
+                                        läge: läge ?? Morgonläge.nu(ansluten: false, hämtar: false, räknar: false,
+                                                                    dataTill: nil, hämtatTill: nil),
+                                        laddar: laddar, laddaOm: laddaOm)
                         }
                     }
                     .tag(dag)
@@ -386,63 +398,40 @@ struct Morgonläge: Equatable {
     /// Klockslaget står redan på hämtningens rad.
     var ingenNattText: String { "Ingen natt för idag än" }
 
+    /// BESLUT B136. Kortets rubrik på den tomma sidan Idag: det som pågår just nu, räkningen före hämtningen.
+    var rubrik: String {
+        if räknar == .pågår { return "Natten räknas" }
+        if hämtar == .pågår { return "Natten hämtas" }
+        if band == .pågår { return "Söker bandet" }
+        return "Ingen natt än"
+    }
+
+    /// BESLUT B136. Kortets text under rubriken, med vanliga ord.
+    var brödtext: String {
+        if räknar == .pågår {
+            return "Natten är hämtad och räknas nu. Sömn och återhämtning står här om en stund."
+        }
+        if hämtar == .pågår {
+            return "Idunn hämtar natten från bandet. Sömn och återhämtning står här när natten är räknad."
+        }
+        if band == .pågår {
+            return "Idunn letar efter bandet. Natten hämtas när bandet är i närheten."
+        }
+        return "Bandet har ingen natt för idag än. Dra ner för att läsa om."
+    }
+
+    /// BESLUT B136. Den lilla raden under texten: hur långt datan når och hur långt hämtningen kommit.
+    var detalj: String? {
+        let delar: [String] = [dataTill.map { (d: Date) -> String in "data till " + Fmt.clock(date: d) },
+                               framstegText].compactMap { (t: String?) -> String? in t }
+        return delar.isEmpty ? nil : delar.joined(separator: " · ")
+    }
+
     /// Läget ur det telefonen vet. Hämtningen är klar när den inte pågår och data finns.
     static func nu(ansluten: Bool, hämtar: Bool, räknar: Bool, dataTill: Date?, hämtatTill: Date?) -> Morgonläge {
         let h: Läge = hämtar ? .pågår : (dataTill != nil ? .klart : .väntar)
         return Morgonläge(band: ansluten ? .klart : .pågår, hämtar: h, räknar: räknar ? .pågår : .väntar,
                           dataTill: dataTill, hämtatTill: hämtatTill)
-    }
-}
-
-/// BESLUT B125. Sidan Idag när dagens natt inte finns: tom på tal, ett lugnt kort med stegen och hur långt de kommit.
-/// Felraden (om något är fel) står överst som på nattens sida.
-struct IdagTomVy: View {
-    let läge: Morgonläge
-    var alert: ListenerAlert?
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                if let a = alert { ListenerAlertRow(alert: a) }
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Natten är inte klar än")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Tema.text)
-                    steg(läge.band, läge.bandText, nil)
-                    steg(läge.hämtar, läge.hämtarText, läge.framstegText)
-                    steg(läge.räknar, "Räknar natten", nil)
-                    if läge.ingenNatt {
-                        Text(läge.ingenNattText)
-                            .font(.footnote)
-                            .foregroundStyle(Tema.dim)
-                            .padding(.top, 2)
-                    }
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(TrendColor.surface, in: RoundedRectangle(cornerRadius: 12))
-                .accessibilityElement(children: .combine)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-        }
-        .background(Tema.bg)
-    }
-
-    private func steg(_ l: Morgonläge.Läge, _ text: String, _ under: String?) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: l == .klart ? "checkmark.circle.fill" : (l == .pågår ? "circle.dotted" : "circle"))
-                .foregroundStyle(l == .klart ? Tema.green : (l == .pågår ? Tema.text : Tema.faint))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(text)
-                    .font(.subheadline)
-                    .foregroundStyle(l == .väntar ? Tema.faint : Tema.text)
-                if let u = under {
-                    Text(u).font(.footnote).foregroundStyle(Tema.dim)
-                }
-            }
-            Spacer(minLength: 0)
-        }
     }
 }
 
@@ -454,11 +443,17 @@ private struct MorningPage: View {
     let alert: ListenerAlert?
     let huvudtal: Huvudtal
     let load: Bool
+    /// BESLUT B136. Satt på den tomma sidan Idag: vad som pågår medan natten inte finns.
+    var läge: Morgonläge? = nil
+    var laddar: Bool = false
+    var laddaOm: (() -> Void)? = nil
     @State private var bundle: NightLoader.CurveBundle?
 
     var body: some View {
-        ScrollView {
-            MorningCardStack(card: card, summary: summary, bundle: bundle ?? preloaded, alert: alert, huvudtal: huvudtal)
+        // BESLUT B136. Dra ner för att läsa om, med Idunns egen pil och ring i stället för systemets snurra.
+        DraNer(laddar: laddar, ladda: laddaOm) {
+            MorningCardStack(card: card, summary: summary, bundle: bundle ?? preloaded, alert: alert, huvudtal: huvudtal,
+                             läge: läge)
         }
         .background(Tema.bg)
         .task(id: summary) {
@@ -476,6 +471,8 @@ struct MorningCardStack: View {
     var bundle: NightLoader.CurveBundle? = nil
     var alert: ListenerAlert?
     var huvudtal: Huvudtal = .tom
+    /// BESLUT B136. Dagens sida innan natten finns: ringarna och raderna står tomma, och ett kort säger vad som pågår.
+    var läge: Morgonläge? = nil
     @Environment(\.öppnaVäcktid) private var öppnaVäcktid
 
     /// BESLUT B65. Huvudtalen med morgonens sömnbehov (Behov, Ikväll och veckans fråga).
@@ -500,7 +497,11 @@ struct MorningCardStack: View {
             }
             // BESLUT B77 · BESLUT B78. Ringarna först (B65: bara när ett tal finns), sedan sömnen med tiderna; kurvan finns i
             // Natten, som kortet öppnar.
-            if h.recovery != nil || h.sleepScore != nil {
+            if let l = läge {
+                // BESLUT B136. Tomma ringar, och under dem vad som pågår.
+                tommaRingar.padding(.bottom, 12)
+                lägeskort(l).padding(.bottom, 12)
+            } else if h.recovery != nil || h.sleepScore != nil {
                 ringar.padding(.bottom, 12)
             }
             sovkort.padding(.bottom, 12)
@@ -508,14 +509,18 @@ struct MorningCardStack: View {
                 BaselineBuildingRow(nights: n).padding(.bottom, 12)
             }
             mått
-            HStack(spacing: 12) {
-                Tecken(färg: Tema.band, text: "ditt normalområde")
-                Tecken(färg: Tema.text, text: "i natt", rund: true)
+            if läge == nil {
+                HStack(spacing: 12) {
+                    Tecken(färg: Tema.band, text: "ditt normalområde")
+                    Tecken(färg: Tema.text, text: "i natt", rund: true)
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(Tema.dim)
+                .padding(.vertical, 8)
+            } else {
+                Color.clear.frame(height: 12)
             }
-            .font(.system(size: 10))
-            .foregroundStyle(Tema.dim)
-            .padding(.vertical, 8)
-            if h.bedtime != nil {
+            if läge == nil, h.bedtime != nil {
                 ikväll.padding(.bottom, 12)
             }
             if h.last("recovery", days: 7, ending: card.day).contains(where: { (v: Double?) -> Bool in v != nil }) {
@@ -576,6 +581,37 @@ struct MorningCardStack: View {
         }
         .kort()
         .contentShape(Rectangle())
+    }
+
+    // MARK: Innan natten finns
+
+    /// BESLUT B136. Ringarna utan tal: samma kort som en morgon, med ett streck i stället för siffran.
+    private var tommaRingar: some View {
+        HStack(spacing: 12) {
+            huvudkort("Återhämtning", nil, Tema.ringTrack)
+            huvudkort("Sömn", nil, Tema.ringTrack)
+        }
+    }
+
+    /// BESLUT B125 · BESLUT B136. Vad som pågår medan dagens natt inte finns: en rubrik, en mening och hur långt det kommit.
+    private func lägeskort(_ l: Morgonläge) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(l.rubrik)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Tema.text)
+            Text(l.brödtext)
+                .font(.subheadline)
+                .foregroundStyle(Tema.dim)
+                .fixedSize(horizontal: false, vertical: true)
+            if let d = l.detalj {
+                Text(d)
+                    .font(Tema.mono(11, .regular))
+                    .foregroundStyle(Tema.faint)
+                    .padding(.top, 2)
+            }
+        }
+        .kort(16)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: Huvudtalen (spåret H)

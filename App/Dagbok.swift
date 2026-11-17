@@ -15,7 +15,8 @@ struct Kvällsfråga: Identifiable, Equatable {
 }
 
 /// BESLUT B130 · METOD M75
-/// Dagboken i appen (PLAN.md U2): kvällens taggar och morgonens skattning, och när appen frågar efter dem.
+/// Dagboken i appen (PLAN.md U2): kvällens taggar och morgonens skattning. BESLUT B136: appen frågar inte av sig
+/// själv längre; frågan och bladet öppnas från Data.
 /// Räkningen är IdunnKits (`Journal`, `JournalClock`); här sparas filen och hålls frågan som visas. Det som skrivs in
 /// är hälsodata som nätterna: en fil i appens mapp (`dagbok.json`), som bara lämnar telefonen med Exportera alla dygn
 /// (dataregeln).
@@ -29,10 +30,6 @@ final class DagbokModell: ObservableObject {
     /// Frågan som visas, eller `nil`.
     @Published private(set) var fråga: Dagboksfråga?
 
-    /// Kvällen där "Inte nu" valdes sedan appen startade: den frågas inte igen förrän appen startas om eller bladet
-    /// öppnas från Data.
-    private var uppskjuten: Int?
-
     /// Filen, bredvid nätterna.
     static var fil: URL { NightFiles.folder.appendingPathComponent(Journal.fileName) }
 
@@ -42,8 +39,7 @@ final class DagbokModell: ObservableObject {
         let läst: (dagbok: Journal, låst: Bool) = DagbokModell.läs(från: DagbokModell.fil)
         dagbok = läst.dagbok
         låst = läst.låst
-        // Frågan sätts redan här, så att morgonens fråga ligger över Morgon från första bilden.
-        fråga = attFråga(nu: Date())
+        // BESLUT B136. Ingen fråga ställs av sig själv: dagboken öppnas från Data.
     }
 
     // MARK: Filen
@@ -78,26 +74,6 @@ final class DagbokModell: ObservableObject {
 
     private static func zon(_ nu: Date) -> Int { TimeZone.current.secondsFromGMT(for: nu) }
 
-    /// Vad appen ska fråga nu (METOD M75), eller `nil`.
-    private func attFråga(nu: Date) -> Dagboksfråga? {
-        guard !låst else { return nil }
-        guard let p = JournalClock.prompt(at: nu, utcOffsetSeconds: DagbokModell.zon(nu), journal: dagbok) else {
-            return nil
-        }
-        switch p {
-        case .morning(let dag):
-            return .morgon(dag: dag)
-        case .evening(let dag):
-            return uppskjuten == dag ? nil : .kväll(dag: dag)
-        }
-    }
-
-    /// Appen öppnades eller kom fram: ställ frågan som är aktuell, om ingen redan visas.
-    func appenÖppnades(nu: Date = Date()) {
-        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
-        if fråga == nil { fråga = attFråga(nu: nu) }
-    }
-
     /// Morgonens skattning, 1–5.
     func svara(morgon dag: Int, utvilad: Int, nu: Date = Date()) {
         sätt(dagbok.setting(JournalMorning(wakeDayNumber: dag, rested: utvilad,
@@ -118,9 +94,8 @@ final class DagbokModell: ObservableObject {
         fråga = nil
     }
 
-    /// "Inte nu", eller bladet drogs ner: kvällen är obesvarad men frågas inte igen i den här körningen.
+    /// "Inte nu", eller bladet drogs ner: kvällen lämnas obesvarad.
     func inteNu(kväll dag: Int) {
-        uppskjuten = dag
         if fråga == .kväll(dag: dag) { fråga = nil }
     }
 
