@@ -102,12 +102,23 @@ enum KonditionText {
         return "Samma som passen före"
     }
 
+    /// BESLUT B138 · METOD M80. Ändringen över perioden: "↑ 2 sedan 12 jun", "↓ 3 sedan 4 nov" eller "Oförändrat sedan
+    /// 12 jun". Talet är ändringen avrundad till hela tal.
+    static func ändring(_ delta: Double, frånDag: Int) -> String {
+        let n: Int = Int(delta.rounded())
+        let datum: String = Fmt.dayMonth(WakeDay(daysSince1970: frånDag))
+        if n > 0 { return "↑ \(n) sedan \(datum)" }
+        if n < 0 { return "↓ \(-n) sedan \(datum)" }
+        return "Oförändrat sedan \(datum)"
+    }
+
     /// Dagnumret som ett klockslag mitt på dagen, för diagrammens x-axel.
     static func datum(_ dag: Int) -> Date { Date(timeIntervalSince1970: Double(dag) * 86_400 + 43_200) }
 }
 
-/// BESLUT B110
-/// Kortet överst på Pass i vila: talet stort med spannet, och vad det bygger på. Ett tryck öppnar `KonditionSkärm`.
+/// BESLUT B110 · BESLUT B138
+/// Kortet överst på Pass i vila, i skissens form: talet stort med spannet, och vad det bygger på. Ett tryck öppnar
+/// `KonditionSkärm`.
 struct KonditionKort: View {
     let visat: FitnessSummary.Shown
     var öppna: () -> Void = {}
@@ -115,25 +126,27 @@ struct KonditionKort: View {
     var body: some View {
         Button(action: öppna) {
             HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Kondition").font(.subheadline).foregroundStyle(.secondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Kondition").font(.system(size: 13)).foregroundStyle(Tema.dim)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(KonditionText.tal(visat.value))
-                            .font(.system(size: 52, weight: .bold, design: .rounded))
+                            .font(.system(size: 52, weight: .light))
                             .monospacedDigit()
-                        Text(KonditionText.spann(visat.value, visat.uncertainty))
-                            .font(.callout)
-                            .foregroundStyle(Tema.dim)
+                            .foregroundStyle(Tema.text)
+                        Text("ml/kg/min").font(.system(size: 13)).foregroundStyle(Tema.dim)
                     }
-                    Text(KonditionText.underlag(visat.basis)).font(.caption).foregroundStyle(.secondary)
+                    Text(KonditionText.spann(visat.value, visat.uncertainty))
+                        .font(.system(size: 14))
+                        .foregroundStyle(Tema.text)
+                    Text(KonditionText.underlag(visat.basis)).font(.system(size: 12)).foregroundStyle(Tema.dim)
                 }
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right").font(.system(size: 13)).foregroundStyle(Tema.dim)
             }
-            .padding(16)
+            .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Tema.card, in: RoundedRectangle(cornerRadius: 16))
-            .contentShape(Rectangle())
+            .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
+            .contentShape(RoundedRectangle(cornerRadius: 24))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
@@ -141,9 +154,96 @@ struct KonditionKort: View {
     }
 }
 
-/// BESLUT B110 · METOD M64
-/// Konditionen i sin helhet: talet, referensen för kön och ålder, mätningarna över tid och pulsen på samma nivå i
-/// steptesten. Allt som värden.
+/// BESLUT B138 · METOD M80
+/// Mätningarna över en period som en kurva i ren SwiftUI: tre rutnätslinjer med värden, en linje mellan mätningarna i
+/// dagordning, en ring vid varje mätning och den sista fylld, och första och sista datumet under. `mätningar` är i dagordning
+/// (som ur `FitnessTrend.within`). Färre än två mätningar ritas inte.
+struct KonditionKurva: View {
+    let mätningar: [FitnessMeasurement]
+
+    private static let marginal: CGFloat = 34
+    private static let ytaHöjd: CGFloat = 180
+
+    var body: some View {
+        if mätningar.count >= 2 {
+            VStack(spacing: 6) {
+                GeometryReader { (g: GeometryProxy) in
+                    ritning(g.size)
+                }
+                .frame(height: Self.ytaHöjd)
+                HStack {
+                    Text(Fmt.dayMonth(WakeDay(daysSince1970: mätningar[0].day)))
+                    Spacer(minLength: 8)
+                    Text(Fmt.dayMonth(WakeDay(daysSince1970: mätningar[mätningar.count - 1].day)))
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(Tema.dim)
+                .padding(.trailing, Self.marginal)
+            }
+        }
+    }
+
+    private func ritning(_ yta: CGSize) -> some View {
+        let värden: [Double] = mätningar.map { (m: FitnessMeasurement) -> Double in m.value }
+        let låg: Double = värden.min() ?? 0
+        let hög: Double = värden.max() ?? 0
+        let bredd: CGFloat = max(1, yta.width - Self.marginal)
+        let höjd: CGFloat = yta.height
+        let första: Int = mätningar[0].day
+        let spann: Double = Double(max(1, mätningar[mätningar.count - 1].day - första))
+        let xAv: (Int) -> CGFloat = { (dag: Int) -> CGFloat in
+            CGFloat(min(1, max(0, Double(dag - första) / spann))) * bredd
+        }
+        let yAv: (Double) -> CGFloat = { (v: Double) -> CGFloat in
+            let f: Double = hög > låg ? (v - låg) / (hög - låg) : 0.5
+            return höjd * CGFloat(0.1 + 0.8 * (1 - f))
+        }
+        var linje: Path = Path()
+        for (i, m) in mätningar.enumerated() {
+            let p: CGPoint = CGPoint(x: xAv(m.day), y: yAv(m.value))
+            if i == 0 { linje.move(to: p) } else { linje.addLine(to: p) }
+        }
+        let nivåer: [Double] = hög > låg ? [hög, (hög + låg) / 2, låg] : [hög]
+        let marginal: CGFloat = Self.marginal
+        let sista: Int = mätningar.count - 1
+
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(nivåer.enumerated()), id: \.offset) { (e: (offset: Int, element: Double)) in
+                let y: CGFloat = yAv(e.element)
+                Path { (v: inout Path) -> Void in
+                    v.move(to: CGPoint(x: 0, y: y))
+                    v.addLine(to: CGPoint(x: bredd, y: y))
+                }
+                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                Text(KonditionText.tal(e.element))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Tema.dim)
+                    .frame(width: marginal, alignment: .trailing)
+                    .position(x: bredd + marginal / 2, y: y - 8)
+            }
+            linje.stroke(Tema.text, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+            ForEach(Array(mätningar.enumerated()), id: \.offset) { (e: (offset: Int, element: FitnessMeasurement)) in
+                let p: CGPoint = CGPoint(x: xAv(e.element.day), y: yAv(e.element.value))
+                if e.offset == sista {
+                    Circle().fill(Tema.text).frame(width: 10, height: 10).position(x: p.x, y: p.y)
+                } else {
+                    Circle()
+                        .fill(Tema.card)
+                        .overlay(Circle().stroke(Tema.text, lineWidth: 2))
+                        .frame(width: 8, height: 8)
+                        .position(x: p.x, y: p.y)
+                }
+            }
+        }
+        .frame(width: yta.width, height: yta.height, alignment: .topLeading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Kondition över tid")
+    }
+}
+
+/// BESLUT B110 · METOD M64 · BESLUT B138 · METOD M80
+/// Konditionen i sin helhet, i skissens form: perioden M, 6M, Å eller Allt, talet och ändringen över perioden, kurvan,
+/// mätningarna, referensen för kön och ålder och pulsen på samma nivå i steptesten. Allt som värden.
 struct KonditionSkärm: View {
     let visat: FitnessSummary.Shown
     var mätningar: [FitnessMeasurement] = []
@@ -151,23 +251,55 @@ struct KonditionSkärm: View {
     var referens: KonditionReferens? = nil
     /// BESLUT B114 · METOD M66. Pulsen vid samma tempo över passen ute.
     var tempopuls: SteadyPulse.Series? = nil
+    /// BESLUT B138. Dagen i dag (dagar sedan 1970-01-01); `nil` räknar telefonens.
+    var idag: Int? = nil
+
+    /// BESLUT B138. Perioden som visas.
+    @State private var period: FitnessTrend.Span
+
+    init(visat: FitnessSummary.Shown, mätningar: [FitnessMeasurement] = [], nivåpuls: [KonditionNivåpuls] = [],
+         referens: KonditionReferens? = nil, tempopuls: SteadyPulse.Series? = nil,
+         period: FitnessTrend.Span = .halfYear, idag: Int? = nil) {
+        self.visat = visat
+        self.mätningar = mätningar
+        self.nivåpuls = nivåpuls
+        self.referens = referens
+        self.tempopuls = tempopuls
+        self.idag = idag
+        _period = State(initialValue: period)
+    }
+
+    private var dagNu: Int { idag ?? KonditionModell.idag() }
 
     var body: some View {
+        let inom: [FitnessMeasurement] = FitnessTrend.within(mätningar, span: period, today: dagNu)
+        let ändring: FitnessTrend.Change? = FitnessTrend.change(inom)
         ScrollView {
-            VStack(spacing: 28) {
-                huvud
+            VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    Spacer(minLength: 0)
+                    PassPiller(val: [(FitnessTrend.Span.month, "M"), (FitnessTrend.Span.halfYear, "6M"),
+                                     (FitnessTrend.Span.year, "Å"), (FitnessTrend.Span.all, "Allt")],
+                               valt: period, välj: { (s: FitnessTrend.Span) -> Void in period = s })
+                    Spacer(minLength: 0)
+                }
+                talrad
+                ändringsrad(ändring)
+                Text(KonditionText.underlag(visat.basis)).font(.system(size: 12)).foregroundStyle(Tema.dim)
+                kurvdel(inom)
+                if !inom.isEmpty { mätlista(inom) }
                 if let r = referens { referensDel(r) }
-                if !mätningar.isEmpty { mätDel }
                 if antalSteptest >= 2 { pulsDel }
                 if let t = tempopuls { tempoDel(t) }
                 Text("Talet är en skattning. Utan labbtest är det osäkert med några enheter, men förändringen över tid går att lita på.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Tema.dim)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        .background(Tema.bg)
         .navigationTitle("Kondition")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -178,79 +310,98 @@ struct KonditionSkärm: View {
 
     // MARK: Talet
 
-    private var huvud: some View {
-        VStack(spacing: 4) {
+    private var talrad: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(KonditionText.tal(visat.value))
-                .font(.system(size: 88, weight: .bold, design: .rounded))
+                .font(.system(size: 72, weight: .light))
                 .monospacedDigit()
-            Text(KonditionText.spann(visat.value, visat.uncertainty) + " · ml/kg/min")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Text(KonditionText.underlag(visat.basis)).font(.caption).foregroundStyle(.secondary)
+                .foregroundStyle(Tema.text)
+            Text("ml/kg/min").font(.system(size: 15)).foregroundStyle(Tema.dim)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+    }
+
+    /// BESLUT B138. Ändringen över perioden och spannet: ändringen grön eller röd när den är större än testets spridning.
+    private func ändringsrad(_ ändring: FitnessTrend.Change?) -> some View {
+        let spann: String = KonditionText.spann(visat.value, visat.uncertainty)
+        return HStack(spacing: 0) {
+            if let ä = ändring {
+                let färg: Color = ä.isNoticeable ? (ä.delta > 0 ? Tema.green : Tema.red) : Tema.text
+                Text(KonditionText.ändring(ä.delta, frånDag: ä.fromDay)).foregroundStyle(färg)
+                Text(" · " + spann).foregroundStyle(Tema.dim)
+            } else {
+                Text(spann).foregroundStyle(Tema.dim)
+            }
+        }
+        .font(.system(size: 14))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Kurvan och mätningarna
+
+    @ViewBuilder
+    private func kurvdel(_ inom: [FitnessMeasurement]) -> some View {
+        if inom.count >= 2 {
+            VStack(alignment: .leading, spacing: 8) {
+                KonditionKurva(mätningar: inom)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
+        } else if inom.isEmpty {
+            Text("Inga mätningar i perioden.").font(.system(size: 13)).foregroundStyle(Tema.dim)
+        }
+    }
+
+    private func mätlista(_ inom: [FitnessMeasurement]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PassKortRubrik(text: "Mätningarna").padding(.bottom, 6)
+            ForEach(Array(inom.reversed().enumerated()), id: \.offset) { (e: (offset: Int, element: FitnessMeasurement)) in
+                let m: FitnessMeasurement = e.element
+                VStack(spacing: 0) {
+                    if e.offset > 0 {
+                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                    }
+                    HStack(spacing: 12) {
+                        PassIkonruta(symbol: m.kind == .stepTest ? "figure.stairs" : "figure.run", ljus: false)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(m.kind == .stepTest ? "Steptest" : "Pass ute")
+                                .font(.system(size: 16))
+                                .foregroundStyle(Tema.text)
+                            Text(Fmt.dayMonth(WakeDay(daysSince1970: m.day)))
+                                .font(.system(size: 12))
+                                .foregroundStyle(Tema.dim)
+                        }
+                        Spacer(minLength: 8)
+                        Text(KonditionText.tal(m.value))
+                            .font(.system(size: 15, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(Tema.text)
+                            .padding(.vertical, 5)
+                            .padding(.horizontal, 12)
+                            .background(Capsule().fill(Tema.card2))
+                    }
+                    .padding(.vertical, 10)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
     }
 
     // MARK: Referensen
 
     private func referensDel(_ r: KonditionReferens) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(KonditionText.motMedel(visat.value, r)).font(.headline)
+            Text(KonditionText.motMedel(visat.value, r)).font(.headline).foregroundStyle(Tema.text)
             ReferensStapel(band: r.band, värde: visat.value, osäkerhet: visat.uncertainty)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Tema.card, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    // MARK: Mätningarna
-
-    private struct Mätpunkt: Identifiable {
-        let id: Int
-        let datum: Date
-        let värde: Double
-        let slag: String
-    }
-
-    private var mätpunkter: [Mätpunkt] {
-        mätningar.indices.map { (i: Int) -> Mätpunkt in
-            let m: FitnessMeasurement = mätningar[i]
-            return Mätpunkt(id: i, datum: KonditionText.datum(m.day), värde: m.value,
-                            slag: m.kind == .stepTest ? "Steptest" : "Pass ute")
-        }
-    }
-
-    private var mätDomän: ClosedRange<Double> {
-        let v: [Double] = mätningar.map { (m: FitnessMeasurement) -> Double in m.value }
-        guard let lo = v.min(), let hi = v.max() else { return 20...60 }
-        return (lo - 6).rounded(.down)...(hi + 6).rounded(.up)
-    }
-
-    private var mätDel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Dina mätningar").font(.headline)
-            Chart {
-                // BESLUT B111. En tunn linje mellan punkterna i dagordning, bakom dem.
-                ForEach(mätpunkter.sorted { (a: Mätpunkt, b: Mätpunkt) -> Bool in a.datum < b.datum }) { (p: Mätpunkt) in
-                    LineMark(x: .value("Dag", p.datum, unit: .day), y: .value("Kondition", p.värde))
-                        .foregroundStyle(Tema.accent.opacity(0.35))
-                        .lineStyle(StrokeStyle(lineWidth: 1.5))
-                }
-                ForEach(mätpunkter) { (p: Mätpunkt) in
-                    PointMark(x: .value("Dag", p.datum, unit: .day), y: .value("Kondition", p.värde))
-                        .symbol(by: .value("Typ", p.slag))
-                        .symbolSize(90)
-                        .foregroundStyle(Tema.accent)
-                }
-            }
-            .chartYScale(domain: mätDomän)
-            .frame(height: 200)
-            .accessibilityLabel("Mätningar över tid")
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Tema.card, in: RoundedRectangle(cornerRadius: 16))
+        .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
     }
 
     // MARK: Pulsen på samma nivå
@@ -268,14 +419,14 @@ struct KonditionSkärm: View {
 
     private var pulsDel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Pulsen på samma nivå").font(.headline)
+            PassKortRubrik(text: "Pulsen på samma nivå")
             Chart {
                 ForEach(nivåpuls.indices, id: \.self) { (i: Int) in
-                    // BESLUT B111. Alla linjer i accentfärgen, nivå 1 starkast.
+                    // BESLUT B111 · BESLUT B138. Alla linjer i `Tema.text`, nivå 1 starkast.
                     LineMark(x: .value("Dag", KonditionText.datum(nivåpuls[i].dag), unit: .day),
                              y: .value("Puls", nivåpuls[i].puls),
                              series: .value("Serie", "Nivå \(nivåpuls[i].nivå)"))
-                        .foregroundStyle(Tema.accent.opacity(Self.nivåopacitet(nivåpuls[i].nivå)))
+                        .foregroundStyle(Tema.text.opacity(Self.nivåopacitet(nivåpuls[i].nivå)))
                         .symbol(by: .value("Nivå", "Nivå \(nivåpuls[i].nivå)"))
                 }
             }
@@ -284,11 +435,11 @@ struct KonditionSkärm: View {
             .accessibilityLabel("Puls på samma nivå över tid")
             Text("Lägre puls på samma nivå betyder bättre kondition.")
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Tema.dim)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Tema.card, in: RoundedRectangle(cornerRadius: 16))
+        .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
     }
 
     // MARK: Pulsen vid samma tempo (BESLUT B114 · METOD M66)
@@ -313,32 +464,33 @@ struct KonditionSkärm: View {
 
     private func tempoDel(_ s: SteadyPulse.Series) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Puls vid samma tempo").font(.headline)
+            PassKortRubrik(text: "Puls vid samma tempo")
             HStack(alignment: .firstTextBaseline) {
                 Text("Vid \(KonditionText.tempo(s.paceSeconds))/km" + (s.running ? "" : " gång"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Tema.dim)
                 Spacer(minLength: 8)
                 if let sist = s.latest {
                     Text(KonditionText.tal(sist.pulse) + " slag/min")
-                        .font(.subheadline)
+                        .font(.system(size: 14))
                         .monospacedDigit()
+                        .foregroundStyle(Tema.text)
                 }
             }
             if let ändring = s.change {
                 Text(KonditionText.tempoÄndring(ändring))
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Tema.dim)
             }
             if s.points.count >= 2 {
                 Chart {
                     ForEach(tempopunkter(s)) { (p: Tempopunkt) in
                         LineMark(x: .value("Dag", p.datum, unit: .day), y: .value("Puls", p.puls))
-                            .foregroundStyle(Tema.accent.opacity(0.6))
+                            .foregroundStyle(Tema.text.opacity(0.6))
                             .lineStyle(StrokeStyle(lineWidth: 1.5))
                         PointMark(x: .value("Dag", p.datum, unit: .day), y: .value("Puls", p.puls))
                             .symbolSize(90)
-                            .foregroundStyle(Tema.accent)
+                            .foregroundStyle(Tema.text)
                     }
                 }
                 .chartYScale(domain: tempoDomän(s))
@@ -347,11 +499,11 @@ struct KonditionSkärm: View {
             }
             Text("Lägre puls vid samma tempo betyder bättre kondition.")
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Tema.dim)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Tema.card, in: RoundedRectangle(cornerRadius: 16))
+        .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
     }
 }
 
@@ -379,14 +531,14 @@ struct ReferensStapel: View {
                     if osäkerhet > 0 {
                         let a: CGFloat = läge(värde - osäkerhet)
                         let b: CGFloat = läge(värde + osäkerhet)
-                        Rectangle().fill(Tema.accent.opacity(0.35))
+                        Rectangle().fill(Tema.text.opacity(0.35))
                             .frame(width: geo.size.width * (b - a), height: 10)
                             .offset(x: geo.size.width * a)
                     }
                     Rectangle().fill(Tema.dim)
                         .frame(width: 2, height: 22)
                         .offset(x: geo.size.width * läge(band.mean) - 1)
-                    Circle().fill(Tema.accent)
+                    Circle().fill(Tema.text)
                         .frame(width: 22, height: 22)
                         .offset(x: geo.size.width * läge(värde) - 11)
                 }
@@ -401,7 +553,7 @@ struct ReferensStapel: View {
                 Text(String(Int(till.rounded())))
             }
             .font(.caption2)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Tema.dim)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Jämfört med andra i samma ålder")

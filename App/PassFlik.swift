@@ -14,11 +14,12 @@ import SleepNeed
 enum PassZonTrappa {
     static func color(_ zon: Int) -> Color {
         switch zon {
-        case 1: return Color(rgb: 0x2C3438)
-        case 2: return Color(rgb: 0x4A565D)
-        case 3: return Color(rgb: 0x7C878D)
-        case 4: return Color(rgb: 0xC9D1D6)
-        case 5: return Tema.text
+        // BESLUT B137. Zonerna har färg (lånat ur stilen Lugn), och bara zonerna; vila är grå.
+        case 1: return Color(rgb: 0x5E7FC9)
+        case 2: return Color(rgb: 0x35C9B0)
+        case 3: return Color(rgb: 0xE9C645)
+        case 4: return Color(rgb: 0xF07F3C)
+        case 5: return Color(rgb: 0xE5407A)
         default: return Color(rgb: 0x1F262A)
         }
     }
@@ -59,6 +60,8 @@ struct ZonRemsa: View {
 struct PassRing: View {
     let andel: Double
     var storlek: CGFloat = 26
+    /// BESLUT B137. Bågens färg: vit, eller zonens färg när ringen visar en zon.
+    var färg: Color = Tema.text
 
     var body: some View {
         let a: Double = andel.isFinite ? min(1, max(0, andel)) : 0
@@ -66,7 +69,7 @@ struct PassRing: View {
             Circle().stroke(Color.white.opacity(0.08), lineWidth: 3)
             Circle()
                 .trim(from: 0, to: CGFloat(a))
-                .stroke(Tema.text, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(färg, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
         .frame(width: storlek, height: storlek)

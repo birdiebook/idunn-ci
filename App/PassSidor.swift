@@ -63,7 +63,7 @@ struct ZonStreck: View {
         HStack(spacing: 4) {
             ForEach(1...5, id: \.self) { (i: Int) in
                 Capsule()
-                    .fill(i == nu ? Tema.text : Color.white.opacity(0.10))
+                    .fill(i == nu ? PassZonTrappa.color(i) : Color.white.opacity(0.10))
                     .frame(height: 6)
                     .frame(maxWidth: .infinity)
             }
@@ -303,7 +303,7 @@ struct PassNuSida: View {
                 let sek: TimeInterval = delar.first(where: { (d: PassZones.Share) -> Bool in d.zone == z })?.seconds ?? 0
                 let tot: TimeInterval = max(1, now.timeIntervalSince(pass.start))
                 HStack(spacing: 14) {
-                    PassRing(andel: sek / tot, storlek: 34)
+                    PassRing(andel: sek / tot, storlek: 34, färg: PassZonTrappa.color(z))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(Int((sek / 60).rounded(.down))) min i " + PassZonText.namn(z).lowercased())
                             .font(.system(size: 14, weight: .semibold))
@@ -609,13 +609,10 @@ struct PassPågårSidor: View {
         Button(action: stopp) {
             Text(steptest ? "Avbryt testet" : "Stopp")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(steptest ? Tema.text : Tema.bg)
+                // BESLUT B137. Stopp och "Avbryt testet" är röda; Start är vit.
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity, minHeight: 52)
-                .background(RoundedRectangle(cornerRadius: 18).fill(steptest ? Tema.card : Tema.text))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(Color.white.opacity(steptest ? 0.12 : 0), lineWidth: 1)
-                )
+                .background(RoundedRectangle(cornerRadius: 18).fill(Tema.red))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 16)

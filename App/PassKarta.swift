@@ -40,15 +40,9 @@ enum PassRuttFormat {
 /// Färgen för en pulszon på rutten: grått för zon 0 (och när maxpulsen saknas), sedan en skala från blått över
 /// grönt och gult till rött för zon 1–5.
 enum PassZonFarg {
+    // BESLUT B137. Samma färger som zonerna i resten av Pass.
     static func color(_ zon: Int) -> Color {
-        switch zon {
-        case 1: return Color.blue
-        case 2: return Color.green
-        case 3: return Color.yellow
-        case 4: return Color.orange
-        case 5: return Color.red
-        default: return Color.gray
-        }
+        (1...5).contains(zon) ? PassZonTrappa.color(zon) : Color.gray
     }
 }
 

@@ -37,7 +37,8 @@ final class IdunnProvUte: XCTestCase {
         let radie = 3_000.0 / (2 * Double.pi)
         let graderPerMeter = 1 / 111_195.0
         return (0...sekunder).map { (s: Int) -> TrackPoint in
-            let v: Double = 2 * Double.pi * Double(s) / 900
+            // BESLUT B138. Farten varierar mjukt (±30 %) och slingan är ändå full efter 900 sekunder.
+            let v: Double = 2 * Double.pi * (Double(s) + 15 * sin(2 * Double.pi * Double(s) / 300)) / 900
             return TrackPoint(t: start.addingTimeInterval(Double(s)),
                               lat: lat0 + radie * (1 - cos(v)) * graderPerMeter,
                               lon: lon0 + radie * sin(v) * graderPerMeter / cos(lat0 * Double.pi / 180),
@@ -92,7 +93,30 @@ final class IdunnProvUte: XCTestCase {
             PassLoad.zone(bpm: bpm, maxPulse: 190)
         }
         XCTAssertGreaterThan(Set(delar.map { $0.klass }).count, 2, "flera zoner syns på rutten")
-        try fånga(NavigationStack { PassDetail(pass: p, maxPulse: maxPuls) }, namn: "ute-pass", höjd: 1_700)
+        try fånga(NavigationStack { PassDetail(pass: p, maxPulse: maxPuls, zonMaxpuls: maxPuls) },
+                  namn: "ute-pass", höjd: 1_500)
+    }
+
+    // MARK: Efteråt (BESLUT B138)
+
+    /// Samma pass ute med tempokurvan och höjdkurvan.
+    func test4SparatTempoOchHojd() throws {
+        let p: Pass = sparat()
+        XCTAssertGreaterThanOrEqual(PassSeries.pace(p.track ?? [], start: p.start).count, 2)
+        XCTAssertGreaterThanOrEqual(PassSeries.altitude(p.track ?? [], start: p.start).count, 2)
+        try fånga(NavigationStack { PassDetail(pass: p, maxPulse: maxPuls, zonMaxpuls: maxPuls, kurva: .tempo) },
+                  namn: "pass-sparat-tempo", höjd: 1_300)
+        try fånga(NavigationStack { PassDetail(pass: p, maxPulse: maxPuls, zonMaxpuls: maxPuls, kurva: .höjd) },
+                  namn: "pass-sparat-hojd", höjd: 1_300)
+    }
+
+    /// Ett pass inne med prov också efter stopp, så att återhämtningen har värden.
+    func test5SparatInne() throws {
+        var p: Pass = sparat().withoutTrack()
+        p.kind = .styrka
+        XCTAssertFalse(p.isOutdoor)
+        XCTAssertNotNil(p.pulseAtStop)
+        try fånga(NavigationStack { PassDetail(pass: p, zonMaxpuls: maxPuls) }, namn: "pass-sparat-inne", höjd: 1_200)
     }
 
     // MARK: Ritverktyget

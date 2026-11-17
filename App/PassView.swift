@@ -212,7 +212,9 @@ struct PassScreen: View {
             .navigationDestination(item: $openedID) { id in
                 if let p = saved.first(where: { $0.id == id }) {
                     PassDetail(pass: p, actions: actions, maxPulse: PassLoad.maxPulse(from: saved),
-                               konditionMaxpuls: kondition.maxpuls?.bpm, close: { openedID = nil })
+                               konditionMaxpuls: kondition.maxpuls?.bpm,
+                               zonMaxpuls: kondition.maxpuls?.bpm ?? PassLoad.maxPulse(from: saved),
+                               close: { openedID = nil })
                 }
             }
             // BESLUT B134. Veckokortet öppnar veckans sida.
@@ -578,7 +580,9 @@ private struct PassRow: View {
     }
 }
 
-/// Ett sparat pass: kurvan och talen, med Exportera och Ta bort.
+/// BESLUT B138 · METOD M79. Ett sparat pass i skissens form (Efteråt): tid, snittpuls och högst, för ett pass ute sträcka och
+/// tempo, pillren Puls · Tempo · Höjd · Karta med kurvan under, tid per pulszon och återhämtningen efter stopp. Exportera och
+/// Ta bort ligger kvar i verktygsraden.
 struct PassDetail: View {
     let pass: Pass
     var actions = PassActions()
@@ -586,18 +590,25 @@ struct PassDetail: View {
     var maxPulse: Double?
     /// BESLUT B110 · METOD M62. Profilens maxpuls, för resultatet av ett steptest; `nil` ger ingen skattning.
     var konditionMaxpuls: Double?
+    /// BESLUT B138. Maxpulsen som zonerna räknas mot; `nil` ger inget zonkort.
+    var zonMaxpuls: Double?
     var close: () -> Void = {}
 
     @State private var shared: SharedPassFile?
     @State private var confirmDelete = false
     @State private var problem: String?
+    /// BESLUT B138. Vilken kurva som visas.
+    @State private var kurva: PassKurvVal
 
     init(pass: Pass, actions: PassActions = PassActions(), maxPulse: Double? = nil,
-         konditionMaxpuls: Double? = nil, close: @escaping () -> Void = {}) {
+         konditionMaxpuls: Double? = nil, zonMaxpuls: Double? = nil, kurva: PassKurvVal = .puls,
+         close: @escaping () -> Void = {}) {
         self.pass = pass
         self.actions = actions
         self.maxPulse = maxPulse
         self.konditionMaxpuls = konditionMaxpuls
+        self.zonMaxpuls = zonMaxpuls
+        _kurva = State(initialValue: kurva)
         self.close = close
     }
 
@@ -629,38 +640,112 @@ struct PassDetail: View {
         }
     }
 
+    /// BESLUT B138. Tempot per minut av passet ur spåret.
+    private var tempoPunkter: [PassSeries.Point] { PassSeries.pace(pass.track ?? [], start: pass.start) }
+
+    /// BESLUT B138. Höjden över passet ur spåret.
+    private var höjdPunkter: [PassSeries.Point] { PassSeries.altitude(pass.track ?? [], start: pass.start) }
+
+    /// BESLUT B138. Tid per pulszon ur den aktiva delen; tom utan maxpuls.
+    private var zoner: [PassZones.Share] {
+        guard let m = zonMaxpuls else { return [] }
+        return PassZones.time(pass.activeSamples) { (bpm: Int) -> Int in PassLoad.zone(bpm: bpm, maxPulse: m) }
+    }
+
+    /// BESLUT B138. Kurvan som visas: den valda när den finns för passet, annars Puls.
+    private func aktiv(tempo: [PassSeries.Point], höjd: [PassSeries.Point]) -> PassKurvVal {
+        switch kurva {
+        case .tempo: return tempo.count >= 2 ? .tempo : .puls
+        case .höjd: return höjd.count >= 2 ? .höjd : .puls
+        case .karta: return PassKarta.harRutt(pass) ? .karta : .puls
+        case .puls: return .puls
+        }
+    }
+
+    private func val(tempo: [PassSeries.Point], höjd: [PassSeries.Point]) -> [(PassKurvVal, String)] {
+        var v: [(PassKurvVal, String)] = [(PassKurvVal.puls, "Puls")]
+        if tempo.count >= 2 { v.append((PassKurvVal.tempo, "Tempo")) }
+        if höjd.count >= 2 { v.append((PassKurvVal.höjd, "Höjd")) }
+        if PassKarta.harRutt(pass) { v.append((PassKurvVal.karta, "Karta")) }
+        return v
+    }
+
+    private func kurvkort(_ vald: PassKurvVal, tempo: [PassSeries.Point], höjd: [PassSeries.Point]) -> some View {
+        let slutPuls: TimeInterval = (pass.afterEnd ?? pass.stop ?? pass.start).timeIntervalSince(pass.start)
+        let stopp: TimeInterval? = pass.stop.map { (s: Date) -> TimeInterval in s.timeIntervalSince(pass.start) }
+        return VStack(alignment: .leading, spacing: 8) {
+            switch vald {
+            case .tempo:
+                PassKortRubrik(text: "Tempo")
+                PassKurva(punkter: tempo, längd: pass.duration, stopp: stopp, omvänd: true,
+                          text: { (v: Double) -> String in KonditionText.tempo(v) }, etikett: "Tempokurva")
+                Text("per km, per minut av passet").font(.system(size: 12)).foregroundStyle(Tema.dim)
+            case .höjd:
+                PassKortRubrik(text: "Höjd")
+                PassKurva(punkter: höjd, längd: pass.duration,
+                          text: { (v: Double) -> String in "\(Int(v.rounded())) m" }, etikett: "Höjdkurva")
+                Text("meter över havet").font(.system(size: 12)).foregroundStyle(Tema.dim)
+            default:
+                PassKortRubrik(text: "Puls")
+                PassKurva(punkter: PassSeries.pulse(pass), längd: slutPuls, stopp: stopp, lucka: 10,
+                          text: { (v: Double) -> String in String(Int(v.rounded())) },
+                          markör: pass.pulseAtStop.map { (b: Int) -> String in "\(b) · stopp" },
+                          etikett: "Pulskurva")
+                Text("lägst " + PassFormat.bpm(pass.minBpm)).font(.system(size: 12)).foregroundStyle(Tema.dim)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
+    }
+
     var body: some View {
+        let tempo: [PassSeries.Point] = tempoPunkter
+        let höjd: [PassSeries.Point] = höjdPunkter
+        let vald: PassKurvVal = aktiv(tempo: tempo, höjd: höjd)
+        let alternativ: [(PassKurvVal, String)] = val(tempo: tempo, höjd: höjd)
         ScrollView {
-            VStack(spacing: 16) {
-                HStack(spacing: 10) {
-                    Image(systemName: PassFormat.symbol(pass.kind)).font(.title).foregroundStyle(Tema.dim)
-                    Text(pass.kind?.displayName ?? "Pass").font(.title.weight(.semibold))
-                    Spacer()
-                    Text(PassFormat.short(pass.duration)).font(.title3).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pass.kind?.displayName ?? "Pass")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Tema.text)
+                    Text(pass.start, format: .dateTime.weekday(.wide).day().month(.wide).hour().minute())
+                        .font(.system(size: 14))
+                        .foregroundStyle(Tema.dim)
                 }
-                Text(pass.start, format: .dateTime.weekday(.wide).day().month(.wide).hour().minute())
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                // BESLUT B110 · METOD M62. Ett steptest visar sitt resultat överst.
+                PassTreTal(pass: pass)
+                // BESLUT B138. Ett pass ute: sträckan och tempot.
+                if !PassRoute.usable(pass.track ?? []).isEmpty { PassUteRutor(pass: pass) }
+                // BESLUT B110 · METOD M62. Ett steptest visar sitt resultat.
                 if pass.isStepTest { SteptestResultat(pass: pass, maxpuls: konditionMaxpuls) }
-                // BESLUT B107 · BESLUT B110. Kartan överst när passet har en rutt.
-                if PassKarta.harRutt(pass) { PassKarta(pass: pass, maxPulse: maxPulse) }
-                PassChart(pass: pass, now: pass.afterEnd ?? pass.stop ?? pass.start)
-                    .frame(height: 220)
+                if alternativ.count > 1 {
+                    HStack {
+                        Spacer(minLength: 0)
+                        PassPiller(val: alternativ, valt: vald, välj: { (v: PassKurvVal) -> Void in kurva = v })
+                        Spacer(minLength: 0)
+                    }
+                }
+                // BESLUT B107 · BESLUT B110. Kartan har sin egen form och ligger utan kort.
+                if vald == .karta {
+                    PassKarta(pass: pass, maxPulse: maxPulse)
+                } else {
+                    kurvkort(vald, tempo: tempo, höjd: höjd)
+                }
                 // BESLUT B117 · METOD M68. Passet har luckor och bandets historik för tiden har inte kommit än.
                 if PassHistory.awaitsHistory(pass, now: Date()) {
                     Label(PassFormat.väntarPåHistoriken, systemImage: "clock.arrow.circlepath")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Tema.dim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                PassStats(pass: pass)
-                if pass.stop != nil { PassRecovery(pass: pass) }
+                PassZonKort(zoner: zoner)
+                if pass.stop != nil { PassEfterStoppKort(pass: pass) }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        .background(Tema.bg)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -711,30 +796,6 @@ private struct PassShareSheet: UIViewControllerRepresentable {
 }
 
 // MARK: - Kurvan och talen
-
-/// Lägsta, snitt och högsta under den aktiva delen (METOD M47), som stora tal.
-struct PassStats: View {
-    let pass: Pass
-
-    var body: some View {
-        HStack(spacing: 0) {
-            stat("lägst", PassFormat.bpm(pass.minBpm))
-            stat("snitt", PassFormat.bpm(pass.averageBpm))
-            stat("högst", PassFormat.bpm(pass.maxBpm))
-        }
-    }
-
-    private func stat(_ namn: String, _ värde: String) -> some View {
-        VStack(spacing: 2) {
-            Text(värde)
-                .font(.system(size: 34, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-            Text(namn).font(.caption).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-    }
-}
 
 /// Pulsen under hela passet som en kurva, med en markering vid stopp. X-axeln är minuter från
 /// Start. Där bandet varit tyst i mer än 10 sekunder bryts linjen i stället för att dras rakt över.

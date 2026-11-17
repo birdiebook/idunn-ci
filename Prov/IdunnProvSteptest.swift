@@ -103,7 +103,8 @@ final class IdunnProvSteptest: XCTestCase {
         XCTAssertEqual(r.levels.count, 4)
         XCTAssertEqual(r.value, 45.1, accuracy: 0.1, "ett rimligt tal ur det påhittade testet")
         XCTAssertEqual(r.uncertainty, 3.9)
-        try fånga(NavigationStack { PassDetail(pass: p, konditionMaxpuls: maxpuls.bpm) }, namn: "steptest-pass", höjd: 1_300)
+        try fånga(NavigationStack { PassDetail(pass: p, konditionMaxpuls: maxpuls.bpm, zonMaxpuls: maxpuls.bpm) },
+                  namn: "steptest-pass", höjd: 1_400)
     }
 
     // MARK: Konditionen i vardagen
@@ -174,10 +175,20 @@ final class IdunnProvSteptest: XCTestCase {
         let kond = PassKondition(modell: modell)
         try fånga(PassScreen(phase: .idle, pass: nil, now: Date(), saved: Array(pass.reversed()), kondition: kond),
                   namn: "kondition-kort", höjd: 900)
+        // BESLUT B138. Dagen för den senaste mätningen som "idag", så att bilden blir densamma varje gång.
+        let senasteDag: Int = modell.mätningar.map { (m: FitnessMeasurement) -> Int in m.day }.max() ?? idagsdag
         try fånga(NavigationStack {
             KonditionSkärm(visat: visat, mätningar: modell.mätningar, nivåpuls: modell.nivåpuls, referens: referens,
-                           tempopuls: temposerie)
-        }, namn: "kondition-skarm", höjd: 1_500)
+                           tempopuls: temposerie, idag: senasteDag)
+        }, namn: "kondition-skarm", höjd: 1_700)
+        try fånga(NavigationStack {
+            KonditionSkärm(visat: visat, mätningar: modell.mätningar, nivåpuls: modell.nivåpuls, referens: referens,
+                           tempopuls: temposerie, period: .month, idag: senasteDag)
+        }, namn: "kondition-skarm-m", höjd: 1_700)
+        // En enda mätning: ingen ändring och ingen kurva, bara listan.
+        try fånga(NavigationStack {
+            KonditionSkärm(visat: visat, mätningar: [modell.mätningar[2]], referens: referens, idag: senasteDag)
+        }, namn: "kondition-skarm-en", höjd: 1_000)
     }
 
     // MARK: Ritverktyget
