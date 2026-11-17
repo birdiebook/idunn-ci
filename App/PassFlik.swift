@@ -137,6 +137,13 @@ enum PassFlikText {
     /// "vecka 47".
     static func vecka(_ dag: Int) -> String { "vecka \(PassPeriod.isoWeek(day: dag))" }
 
+    /// BESLUT B135. Passets tid i statusraden: "24:10" under en timme, "1:05:09" från en timme.
+    static func passtid(_ sekunder: TimeInterval) -> String {
+        let s: Int = max(0, Int(sekunder.rounded(.down)))
+        if s < 3_600 { return String(format: "%d:%02d", s / 60, s % 60) }
+        return String(format: "%d:%02d:%02d", s / 3_600, (s % 3_600) / 60, s % 60)
+    }
+
     /// Timmar:minuter, hela minuter: "1:40".
     static func timmar(_ sekunder: TimeInterval) -> String {
         let m: Int = max(0, Int((sekunder / 60).rounded()))

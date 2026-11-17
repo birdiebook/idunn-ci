@@ -1,6 +1,6 @@
 // RITAR SIDORNA I ETT PÅGÅENDE PASS TILL PNG (BESLUT B124, METOD M71): Nu, Översikt och Karta för ett pass ute
 // (`pass-nu`, `pass-oversikt`, `pass-karta`), Nu och Översikt för ett pass inne (`pass-nu-inne`, `pass-oversikt-inne`)
-// och hela fliken med sidprickarna och Stopp (`pass-sidor`).
+// och hela fliken med statusraden, pillren och Stopp (`pass-sidor`, `pass-sidor-inne`; BESLUT B133, B135).
 //
 // DATAN ÄR PÅHITTAD: en slinga på cirka 3 km kring en påhittad punkt och en puls som stiger från 110 till 160.
 // Riktiga positioner och riktig hälsodata får aldrig in här — CLAUDE.md §Dataregeln.
@@ -39,7 +39,7 @@ final class IdunnProvSidor: XCTestCase {
             return TrackPoint(t: s0.addingTimeInterval(Double(s)),
                               lat: lat0 + radie * (1 - cos(v)) * graderPerMeter,
                               lon: lon0 + radie * sin(v) * graderPerMeter / cos(lat0 * Double.pi / 180),
-                              speed: 3.3, altitude: 40 + 6 * sin(v), accuracy: 5)
+                              speed: 3.3, altitude: 20 + 0.03 * Double(s), accuracy: 5)
         }
     }
 
@@ -67,11 +67,12 @@ final class IdunnProvSidor: XCTestCase {
         XCTAssertFalse(inne.isOutdoor)
         try fånga(sida(PassNuSida(pass: ute, now: nu, maxpuls: maxPuls)), namn: "pass-nu", höjd: 900)
         try fånga(sida(PassOversiktSida(pass: ute, now: nu, maxpuls: maxPuls)), namn: "pass-oversikt", höjd: 900)
-        try fånga(sida(PassKartSida(pass: ute, maxpuls: maxPuls)), namn: "pass-karta", höjd: 800)
+        try fånga(sida(PassKartSida(pass: ute, now: nu, maxpuls: maxPuls)), namn: "pass-karta", höjd: 800)
         try fånga(sida(PassNuSida(pass: inne, now: nu, maxpuls: maxPuls)), namn: "pass-nu-inne", höjd: 900)
         try fånga(sida(PassOversiktSida(pass: inne, now: nu, maxpuls: maxPuls)), namn: "pass-oversikt-inne", höjd: 900)
         let medMaxpuls: PassKondition = PassKondition(maxpuls: MaxPulse(bpm: maxPuls, source: .own))
         try fånga(PassScreen(phase: .running, pass: ute, now: nu, saved: [], kondition: medMaxpuls), namn: "pass-sidor", höjd: 900)
+        try fånga(PassScreen(phase: .running, pass: inne, now: nu, saved: [], kondition: medMaxpuls), namn: "pass-sidor-inne", höjd: 900)
     }
 
     // MARK: Ritverktyget

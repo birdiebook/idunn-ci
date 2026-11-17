@@ -167,7 +167,8 @@ struct PassScreen: View {
                     PassPågårSidor(pass: p, now: now,
                                    maxpuls: kondition.maxpuls?.bpm ?? PassLoad.maxPulse(from: saved),
                                    nu: p.isStepTest ? AnyView(steptestNu(p)) : nil,
-                                   stopp: actions.stop)
+                                   stopp: actions.stop,
+                                   steptest: p.isStepTest)
                 } else {
                     ScrollView {
                         VStack(spacing: vila ? 14 : 20) {
@@ -338,9 +339,10 @@ struct PassScreen: View {
     /// Orden i takten: två steg upp och två ner, i takt med klicket.
     private static let takt: [String] = ["upp", "upp", "ner", "ner"]
 
-    /// BESLUT B111 · METOD M62. Medan steptestet pågår: fem streck för nivåerna, nivån och tiden till nästa, den stora
-    /// pulsen, gränsen där testet stannar, ett kort med takten (ordet som gäller just nu markerat, i takt med
-    /// metronomen). Kurvan ligger på sidan Översikt och Stopp under sidorna (BESLUT B124).
+    /// BESLUT B111 · METOD M62 · BESLUT B133 · BESLUT B135. Medan steptestet pågår, i skissens form: ett kort med nivån och
+    /// tiden till nästa, en stor ring som fylls under nivån med takten i mitten, och orden upp upp ner ner med det som
+    /// gäller just nu markerat (i takt med metronomen); under det två rutor, pulsen och gränsen där testet stannar.
+    /// Kurvan ligger på sidan Översikt och Stopp under sidorna (BESLUT B124).
     private func steptestNu(_ p: Pass) -> some View {
         let sek: TimeInterval = now.timeIntervalSince(p.start)
         let sista: Int = StepTest.cadences.count - 1
@@ -348,60 +350,85 @@ struct PassScreen: View {
         let kvar: TimeInterval = StepTest.levelSeconds * Double(nivå + 1) - sek
         let tid: String = PassRuttFormat.minutes(max(0, kvar.rounded(.up)))
         let nästa: String = nivå == sista ? "klart om " : "nästa nivå om "
-        return VStack(spacing: 16) {
-            HStack(spacing: 6) {
-                ForEach(0..<StepTest.cadences.count, id: \.self) { (i: Int) in
-                    Capsule()
-                        .fill(i < nivå ? Tema.text : (i == nivå ? Tema.accent : Tema.track))
-                        .frame(height: 8)
-                }
-            }
-            VStack(spacing: 2) {
-                Text("Nivå \(nivå + 1) av \(StepTest.cadences.count)")
-                    .font(.title2.weight(.semibold))
-                HStack(spacing: 0) {
-                    Text(nästa).foregroundStyle(Tema.dim)
-                    Text(tid).font(Tema.mono(17)).foregroundStyle(Tema.text)
-                }
-                .font(.subheadline)
-            }
-            bigPulse(p)
-            silentRow(p)
-            if let m = kondition.maxpuls {
-                Text("stannar vid \(SteptestText.gräns(m.bpm))")
-                    .font(.subheadline)
+        let andel: Double = min(1, max(0, (sek - StepTest.levelSeconds * Double(nivå)) / StepTest.levelSeconds))
+        let slag: Int = ((kondition.slag % 4) + 4) % 4
+        let senaste: PassSample? = p.samples.last
+        let färskt: Bool = senaste.map { (s: PassSample) -> Bool in
+            now.timeIntervalSince(s.t) <= Self.silentSeconds
+        } ?? false
+        let gräns: String = kondition.maxpuls.map { (m: MaxPulse) -> String in String(SteptestText.gräns(m.bpm)) } ?? "–"
+        return VStack(spacing: 8) {
+            VStack(spacing: 14) {
+                HStack {
+                    Text("Nivå \(nivå + 1) av \(StepTest.cadences.count)")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Tema.dim)
+                    Spacer(minLength: 8)
+                    HStack(spacing: 0) {
+                        Text(nästa)
+                        Text(tid).monospacedDigit()
+                    }
+                    .font(.system(size: 13))
                     .foregroundStyle(Tema.dim)
+                }
+                ZStack {
+                    Circle().stroke(Color.white.opacity(0.08), lineWidth: 10)
+                    Circle()
+                        .trim(from: 0, to: CGFloat(andel))
+                        .stroke(Tema.text, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    VStack(spacing: 2) {
+                        Text(String(Int(StepTest.cadences[nivå])))
+                            .font(.system(size: 56, weight: .light))
+                            .monospacedDigit()
+                            .foregroundStyle(Tema.text)
+                        Text("steg per minut").font(.system(size: 13)).foregroundStyle(Tema.dim)
+                    }
+                }
+                .frame(width: 190, height: 190)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(Int(StepTest.cadences[nivå])) steg per minut")
+                HStack(spacing: 6) {
+                    ForEach(0..<4, id: \.self) { (i: Int) in
+                        let på: Bool = i == slag
+                        HStack(spacing: 5) {
+                            if på { Circle().fill(Tema.text).frame(width: 5, height: 5) }
+                            Text(Self.takt[i])
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(på ? Tema.text : Tema.dim)
+                        }
+                        .padding(.vertical, 5)
+                        .padding(.horizontal, 10)
+                        .background(Capsule().fill(Tema.card2))
+                    }
+                }
             }
-            taktkort(nivå)
+            .padding(16)
+            .frame(maxWidth: .infinity)
+            .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
+            HStack(spacing: 8) {
+                steptestRuta("Puls", färskt ? PassFormat.bpm(senaste?.bpm) : "–")
+                steptestRuta("Stannar vid", gräns)
+            }
+            silentRow(p, dämpad: true)
+                .padding(.top, 6)
         }
     }
 
-    /// BESLUT B111. Kortet med takten: orden upp upp ner ner med det som gäller just nu i accent, fyra streck som följer
-    /// samma slag, och stegen per minut. Slaget kommer ur metronomen (`kondition.slag`).
-    private func taktkort(_ nivå: Int) -> some View {
-        let nu: Int = ((kondition.slag % 4) + 4) % 4
-        return VStack(spacing: 12) {
-            HStack(spacing: 0) {
-                ForEach(0..<4, id: \.self) { (i: Int) in
-                    Text(Self.takt[i])
-                        .font(.title3.weight(i == nu ? .bold : .regular))
-                        .foregroundStyle(i == nu ? Tema.accent : Tema.faint)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            HStack(spacing: 6) {
-                ForEach(0..<4, id: \.self) { (i: Int) in
-                    Capsule()
-                        .fill(i == nu ? Tema.accent : Tema.track)
-                        .frame(height: 8)
-                }
-            }
-            Text("\(Int(StepTest.cadences[nivå])) steg per minut")
-                .font(.caption)
-                .foregroundStyle(Tema.dim)
+    private func steptestRuta(_ titel: String, _ värde: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(titel).font(.system(size: 12, weight: .semibold)).foregroundStyle(Tema.text)
+            Spacer(minLength: 0)
+            Text(värde)
+                .font(.system(size: 30, weight: .light))
+                .monospacedDigit()
+                .foregroundStyle(Tema.text)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
         }
-        .frame(maxWidth: .infinity)
-        .kort(16)
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 84, maxHeight: 84, alignment: .topLeading)
+        .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
         .accessibilityElement(children: .combine)
     }
 
@@ -458,17 +485,17 @@ struct PassScreen: View {
 
     /// "Bandet hörs inte": ingen puls har kommit på 10 sekunder.
     @ViewBuilder
-    private func silentRow(_ p: Pass) -> some View {
+    private func silentRow(_ p: Pass, dämpad: Bool = false) -> some View {
         let sist = p.samples.last?.t ?? p.start
         if now.timeIntervalSince(sist) > Self.silentSeconds {
             VStack(spacing: 4) {
                 Label("Bandet hörs inte", systemImage: "antenna.radiowaves.left.and.right.slash")
                     .font(.subheadline)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(dämpad ? Tema.dim : Color.orange)
                 // BESLUT B117. Bandet mäter vidare själv: passet fylls när telefonen fått dess historik.
                 Text(PassFormat.väntarPåHistoriken)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(dämpad ? Tema.dim : Color.secondary)
                     .multilineTextAlignment(.center)
             }
         }
