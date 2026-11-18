@@ -125,6 +125,31 @@ public enum MorningCard {
         return r
     }
 
+    /// METOD M81 · BESLUT B141. Stadiernas mått, i ordningen vaken, lätt, djup, REM.
+    public static let stageMeasures: [Trends.Measure] = [.awakeTime, .lightSleep, .deepSleep, .remSleep]
+
+    /// METOD M81 · BESLUT B141. Stadiets andel av natten (0–1): minuterna delade med de fyra stadiernas summa, och
+    /// andelens normalområde med M7:s regel ur nätterna före. En natt räknas bara när alla fyra stadier har ett tal och
+    /// summan är över noll. `nil` när natten `day` saknar andel; området är `nil` innan det finns nog med nätter.
+    public static func stageShare(_ m: Trends.Measure, day: WakeDay,
+                                  idun: Trends.Values) -> (value: Double, range: ClosedRange<Double>?)? {
+        guard stageMeasures.contains(m) else { return nil }
+        func andel(_ d: WakeDay) -> Double? {
+            var summa: Double = 0
+            for s in stageMeasures {
+                guard let v = idun[s]?[d], v.isFinite, v >= 0 else { return nil }
+                summa += v
+            }
+            guard summa > 0, let v = idun[m]?[d] else { return nil }
+            return v / summa
+        }
+        guard let värde = andel(day) else { return nil }
+        let område = Baseline.normalRange(before: day, value: andel)
+        return (värde, område.map { (o: Baseline.NormalRange) -> ClosedRange<Double> in
+            max(0, o.lower)...min(1, max(o.upper, max(0, o.lower)))
+        })
+    }
+
     /// METOD M33 · BESLUT B40. Alla morgnar som har en natt, äldsta först.
     public static func days(idun: Trends.Values) -> [Day] {
         var dagar: Set<WakeDay> = []
