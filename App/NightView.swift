@@ -402,7 +402,8 @@ struct NightStack: View {
         stadierader.contains { (r: Stadierad) -> Bool in r.minuter != nil }
     }
 
-    static func procent(_ andel: Double) -> String { "\(Int((andel * 100).rounded())) %" }
+    /// Hårt mellanslag före procenttecknet, så att "7 %" aldrig bryts över två rader.
+    static func procent(_ andel: Double) -> String { "\(Int((andel * 100).rounded()))\u{00A0}%" }
 
     static func lägesfärg(_ läge: Int?) -> Color {
         switch läge {
@@ -448,6 +449,7 @@ struct NightStack: View {
                 Text(r.andel.map { (a: Double) -> String in Self.procent(a) } ?? "")
                     .font(Tema.mono(12))
                     .foregroundStyle(Self.lägesfärg(r.läge))
+                    .fixedSize()
             }
             Normalremsa(värde: r.andel, område: r.område, färg: r.färg)
                 .frame(height: 5)
