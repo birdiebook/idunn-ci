@@ -392,8 +392,8 @@ struct NightStack: View {
         stadierader.contains { (r: Stadierad) -> Bool in r.minuter != nil }
     }
 
-    /// Hårt mellanslag före procenttecknet, så att "7 %" aldrig bryts över två rader.
-    static func procent(_ andel: Double) -> String { "\(Int((andel * 100).rounded()))\u{00A0}%" }
+    /// "7%" utan mellanslag, som Effektivitet: brickan är smal, och tiden ska få plats hel bredvid.
+    static func procent(_ andel: Double) -> String { "\(Int((andel * 100).rounded()))%" }
 
     /// BESLUT B141 · METOD M81. Fyra brickor under kurvan: stadiet, nattens tid med andelen till höger, och en remsa
     /// med ditt normala område som andel av natten och ett streck för natten. Andelen är alltid grå: remsan bär
@@ -423,15 +423,16 @@ struct NightStack: View {
                     .foregroundStyle(Tema.dim)
             }
             // användaren 2026-11-18: andelen till höger om tiden.
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+            // Tiden går först: den krymper hellre än kortas, och andelen viker sig före den.
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(r.minuter.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
-                    .font(Tema.mono(18, .bold))
+                    .font(Tema.mono(16, .bold))
                     .foregroundStyle(r.minuter == nil ? Tema.faint : Tema.text)
+                    .layoutPriority(1)
                 Spacer(minLength: 0)
                 Text(r.andel.map { (a: Double) -> String in Self.procent(a) } ?? "")
-                    .font(Tema.mono(12))
+                    .font(Tema.mono(11))
                     .foregroundStyle(Tema.dim)
-                    .fixedSize()
             }
             Normalremsa(värde: r.andel, område: r.område, färg: r.färg)
                 .frame(height: 5)
@@ -439,8 +440,8 @@ struct NightStack: View {
                 .padding(.bottom, 2)
         }
         .lineLimit(1)
-        .minimumScaleFactor(0.8)
-        .padding(.horizontal, 9)
+        .minimumScaleFactor(0.7)
+        .padding(.horizontal, 8)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Tema.card, in: RoundedRectangle(cornerRadius: 12))
