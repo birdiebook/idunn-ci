@@ -3,7 +3,7 @@ import Night
 import Sound
 
 /// BESLUT B62 · BESLUT B63 · BESLUT B71 · METOD M18 · METOD M32 · METOD M37 · METOD M50 · METOD M52 · METOD M56
-/// Natten (tryck på kurvan eller på Sömn-ringen): Sömn och sömnperioden över kurvan, nattens kurva med axel, stadierna
+/// Natten (tryck på kurvan eller på Sömn-ringen): Sömn, sömnperiodens längd och effektiviteten över kurvan, nattens kurva med axel, stadierna
 /// som fyra brickor mot ditt normala (BESLUT B141), kortet Över natten (HRV, Hudtemp, Andning, Rörelse, Ljud och Slag
 /// för slag), Sömnpoängen med sina tre delar, medelpuls, rörelse och snarkning mot ditt normala, Sömnbehov, Effektivitet med uppvak, Sömnstress,
 /// Regelbundenhet och veckan. Det som hör till spåret H ritas när dess tal finns (BESLUT B65): sömnbehovet och
@@ -179,8 +179,9 @@ struct NightStack: View {
         }
     }
 
-    /// BESLUT B141. Toppen över kurvan. Utan valt stadium: Sömn stort, och till höger perioden som klockslag med dess
-    /// längd och effektiviteten. Med ett valt stadium: stadiets tid stort, andelen av natten och ditt normala.
+    /// BESLUT B141. Toppen över kurvan. Utan valt stadium: Sömn stort, och till höger sömnperiodens längd och
+    /// effektiviteten; klockslagen står bara vid strecken under kurvan. Med ett valt stadium: stadiets tid stort,
+    /// andelen av natten och ditt normala.
     @ViewBuilder private var nattHuvud: some View {
         if let s = valt, let r = stadierad(s) {
             HStack(alignment: .bottom) {
@@ -220,11 +221,12 @@ struct NightStack: View {
                                 .foregroundStyle(Tema.accent)
                                 .accessibilityLabel("Ändrad")
                         }
-                        Text(klockslag ?? "–")
+                        Text(periodMinuter.map { (m: Double) -> String in "period " + Fmt.hm(minutes: m) }
+                             ?? "period –")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Tema.text)
                     }
-                    Text(periodText)
+                    Text(summary.efficiency.map { (e: Double) -> String in "\(Int(e.rounded())) % effektiv" } ?? " ")
                         .font(.system(size: 13))
                         .foregroundStyle(Tema.dim)
                     if let u = saknas {
@@ -253,22 +255,6 @@ struct NightStack: View {
                 .tracking(1.4)
                 .foregroundStyle(Tema.faint)
         }
-    }
-
-    /// Sömnperioden som klockslag, "23:10–06:55", ur lagren eller ur nattens början och slut.
-    private var klockslag: String? {
-        if let l = layers {
-            return Fmt.clock(date: Date(timeIntervalSince1970: l.period.lowerBound)) + "–"
-                + Fmt.clock(date: Date(timeIntervalSince1970: l.period.upperBound))
-        }
-        if let a = summary.start, let b = summary.end { return Fmt.clock(date: a) + "–" + Fmt.clock(date: b) }
-        return nil
-    }
-
-    private var periodText: String {
-        let längd: String = periodMinuter.map { (m: Double) -> String in "period " + Fmt.hm(minutes: m) } ?? "period –"
-        guard let e = summary.efficiency else { return längd }
-        return längd + " · \(Int(e.rounded())) % effektiv"
     }
 
     // MARK: Över natten
