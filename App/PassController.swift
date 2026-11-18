@@ -6,8 +6,8 @@ import UIKit
 import WhoopFrames
 
 /// BESLUT B58 · METOD M47
-/// Passet (PLAN.md spåret P): ett pass med puls för bastu, dusch, styrka, kondition
-/// eller promenad. Äger `PassRecorder` (IdunnKits tillståndsmaskin), slår på pulsen
+/// Passet (PLAN.md spåret P): ett pass med puls för bastu, dusch, styrka, kondition,
+/// promenad eller golf (B142). Äger `PassRecorder` (IdunnKits tillståndsmaskin), slår på pulsen
 /// från bandet medan passet pågår och 10 minuter efter stopp (`Recorder.startPulse`)
 /// och av när det är färdigt, och håller klockan igång med en timer per sekund.
 ///
