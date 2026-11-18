@@ -207,39 +207,4 @@ final class MorningCardTests: XCTestCase {
         XCTAssertEqual(r.track.lowerBound, 54)
         XCTAssertEqual(r.track.upperBound, 58)
     }
-
-    /// METOD M81 · BESLUT B141. Andelen är stadiets minuter mot de fyra stadiernas summa, och området räknas ur
-    /// andelarna före natten, inte ur minuterna: en kort natt med samma fördelning hamnar inom området.
-    func testStadietsAndelOchOmrådetRäknasIAndelar() throws {
-        var v: Trends.Values = [:]
-        for k in 1..<36 {
-            // Fem veckor bakåt: 8 h nätter med djupsömnen kring 20 % (19 eller 21 %).
-            let djup: Double = k % 2 == 0 ? 0.19 : 0.21
-            let summa: Double = 480
-            v[.deepSleep, default: [:]][idag - k] = djup * summa
-            v[.remSleep, default: [:]][idag - k] = 0.22 * summa
-            v[.awakeTime, default: [:]][idag - k] = 0.08 * summa
-            v[.lightSleep, default: [:]][idag - k] = (1 - djup - 0.22 - 0.08) * summa
-        }
-        // Natten är kort (5 h) men har samma fördelning.
-        v[.deepSleep, default: [:]][idag] = 60
-        v[.remSleep, default: [:]][idag] = 66
-        v[.awakeTime, default: [:]][idag] = 24
-        v[.lightSleep, default: [:]][idag] = 150
-        let a = try XCTUnwrap(MorningCard.stageShare(.deepSleep, day: idag, idun: v))
-        XCTAssertEqual(a.value, 0.2, accuracy: 1e-9)
-        let område = try XCTUnwrap(a.range)
-        XCTAssertTrue(område.contains(a.value))
-        XCTAssertLessThan(område.upperBound, 0.25)
-        // Minuterna ligger däremot långt under sitt område.
-        let minuter = try XCTUnwrap(MorningCard.nightRow(.deepSleep, day: idag, idun: v)?.range)
-        XCTAssertLessThan(60, minuter.lowerBound)
-    }
-
-    /// METOD M81. En natt där något av de fyra stadierna saknas har ingen andel, och andra mått ger ingen.
-    func testAndelenKräverAllaFyraStadier() {
-        let v: Trends.Values = [.deepSleep: [idag: 60], .remSleep: [idag: 66], .lightSleep: [idag: 150]]
-        XCTAssertNil(MorningCard.stageShare(.deepSleep, day: idag, idun: v))
-        XCTAssertNil(MorningCard.stageShare(.hrv, day: idag, idun: v))
-    }
 }

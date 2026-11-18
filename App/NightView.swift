@@ -345,7 +345,7 @@ struct NightStack: View {
 
     // MARK: Stadierna, puls, rörelse och ljud mot ditt normala
 
-    /// Ett stadium med nattens minuter, andelen av stadiernas summa (0–1) och andelens normalområde (METOD M81).
+    /// Ett stadium med nattens minuter, andelen av stadiernas summa (0–1, METOD M81) och minuternas normalområde (M52).
     struct Stadierad {
         var stadium: SleepStage
         var namn: String
@@ -375,9 +375,8 @@ struct NightStack: View {
         }
         return Self.stadieordning.map { (r: (SleepStage, String, Trends.Measure)) -> Stadierad in
             let v: Double? = minuter(r.0)
-            // METOD M81. Området räknas i andelar ur nätterna före.
-            let område: ClosedRange<Double>? = v == nil ? nil
-                : MorningCard.stageShare(r.2, day: day, idun: values)?.range
+            // METOD M52 · BESLUT B141. Området räknas i minuter ur nätterna före.
+            let område: ClosedRange<Double>? = v == nil ? nil : nr(r.2)?.range
             return Stadierad(stadium: r.0, namn: r.1, färg: NattRitning.färg(r.0), minuter: v,
                              andel: v.flatMap { (m: Double) -> Double? in total > 0 ? m / total : nil },
                              område: område)
@@ -396,7 +395,7 @@ struct NightStack: View {
     static func procent(_ andel: Double) -> String { "\(Int((andel * 100).rounded()))%" }
 
     /// BESLUT B141 · METOD M81. Fyra brickor under kurvan: stadiet, nattens tid med andelen till höger, och en remsa
-    /// med ditt normala område som andel av natten och ett streck för natten. Andelen är alltid grå: remsan bär
+    /// med ditt normala område i minuter och ett streck för natten. Andelen är alltid grå och bedömer inget: remsan bär
     /// jämförelsen. Ett tryck väljer stadiet (BESLUT B83); samma igen släcker.
     private var brickor: some View {
         HStack(spacing: 8) {
@@ -434,7 +433,7 @@ struct NightStack: View {
                     .font(Tema.mono(11))
                     .foregroundStyle(Tema.dim)
             }
-            Normalremsa(värde: r.andel, område: r.område, färg: r.färg)
+            Normalremsa(värde: r.minuter, område: r.område, färg: r.färg)
                 .frame(height: 5)
                 .padding(.top, 3)
                 .padding(.bottom, 2)
@@ -803,8 +802,8 @@ struct Fördelning: View {
     }
 }
 
-/// BESLUT B141 · METOD M81. En tunn remsa för ett stadium: ditt normala område som ett ljusare fält och natten som ett
-/// streck i stadiets färg, båda som andel av natten. Skalan går från noll till det största av områdets övre kant gånger 1,5 och natten gånger 1,1, så att
+/// BESLUT B141 · METOD M52. En tunn remsa för ett stadium: ditt normala område som ett ljusare fält och natten som ett
+/// streck i stadiets färg, båda i minuter. Skalan går från noll till det största av områdets övre kant gånger 1,5 och natten gånger 1,1, så att
 /// området hamnar ungefär mitt i och natten alltid syns. Utan område ritas bara spåret och strecket.
 struct Normalremsa: View {
     let värde: Double?
@@ -813,7 +812,7 @@ struct Normalremsa: View {
 
     var body: some View {
         GeometryReader { (g: GeometryProxy) in
-            // Golvet 0,01 bara mot division med noll: andelar är små tal, och ett golv på 1 tryckte ihop allt till vänster.
+            // Golvet 0,01 bara mot division med noll.
             let topp: Double = max((område?.upperBound ?? 0) * 1.5, (värde ?? 0) * 1.1, 0.01)
             let x: (Double) -> CGFloat = { (v: Double) -> CGFloat in g.size.width * CGFloat(min(max(v / topp, 0), 1)) }
             ZStack(alignment: .leading) {
