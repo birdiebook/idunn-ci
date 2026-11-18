@@ -122,7 +122,6 @@ struct NightStack: View {
                 .padding(.top, 6)
             if harStadietal {
                 brickor.padding(.top, 8)
-                stunderRad.padding(.top, 8)
             }
             lagerkort.padding(.top, 10).padding(.bottom, 12)
             // BESLUT B65. Poängen (H2) ritas bara när talet finns.
@@ -443,8 +442,8 @@ struct NightStack: View {
         }
     }
 
-    /// BESLUT B141 · METOD M81. Fyra brickor under kurvan: stadiet, nattens tid, en remsa med ditt normala område
-    /// som andel av natten och ett streck för natten, och nattens andel. Andelen får färg bara utanför området (gul
+    /// BESLUT B141 · METOD M81. Fyra brickor under kurvan: stadiet, nattens tid med andelen till höger, och en remsa
+    /// med ditt normala område som andel av natten och ett streck för natten. Andelen får färg bara utanför området (gul
     /// sämre, blå bättre, som bandraden). Ett tryck väljer stadiet (BESLUT B83); samma igen släcker.
     private var brickor: some View {
         HStack(spacing: 8) {
@@ -470,15 +469,20 @@ struct NightStack: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Tema.dim)
             }
-            Text(r.minuter.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
-                .font(Tema.mono(18, .bold))
-                .foregroundStyle(r.minuter == nil ? Tema.faint : Tema.text)
+            // användaren 2026-11-18: andelen till höger om tiden.
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(r.minuter.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
+                    .font(Tema.mono(18, .bold))
+                    .foregroundStyle(r.minuter == nil ? Tema.faint : Tema.text)
+                Spacer(minLength: 0)
+                Text(r.andel.map { (a: Double) -> String in Self.procent(a) } ?? "")
+                    .font(Tema.mono(12))
+                    .foregroundStyle(Self.lägesfärg(r.läge))
+            }
             Normalremsa(värde: r.andel, område: r.område, färg: r.färg)
                 .frame(height: 5)
-                .padding(.vertical, 2)
-            Text(r.andel.map { (a: Double) -> String in Self.procent(a) } ?? " ")
-                .font(Tema.mono(12))
-                .foregroundStyle(Self.lägesfärg(r.läge))
+                .padding(.top, 3)
+                .padding(.bottom, 2)
         }
         .lineLimit(1)
         .minimumScaleFactor(0.8)
@@ -491,19 +495,6 @@ struct NightStack: View {
         }
         .opacity(valt == nil || vald ? 1 : 0.4)
         .contentShape(Rectangle())
-    }
-
-    /// BESLUT B141. Under brickorna när ett stadium är valt: hur många stunder, den längsta och snittet.
-    private var stunderRad: some View {
-        var text: String = " "
-        if let s = valt, let t = layers?.stunder(s) {
-            text = "\(t.antal) \(t.antal == 1 ? "stund" : "stunder") · längsta \(Int((t.längst / 60).rounded())) min"
-            if let m = minuter(s) { text += " · snitt \(Int((m / Double(t.antal)).rounded())) min" }
-        }
-        return Text(text)
-            .font(.system(size: 12.5))
-            .foregroundStyle(Tema.dim)
-            .lineLimit(1)
     }
 
     private var pulsRörelseLjud: some View {
