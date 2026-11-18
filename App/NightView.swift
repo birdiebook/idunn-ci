@@ -812,7 +812,8 @@ struct Normalremsa: View {
 
     var body: some View {
         GeometryReader { (g: GeometryProxy) in
-            let topp: Double = max((område?.upperBound ?? 0) * 1.5, (värde ?? 0) * 1.1, 1)
+            // Golvet 0,01 bara mot division med noll: andelar är små tal, och ett golv på 1 tryckte ihop allt till vänster.
+            let topp: Double = max((område?.upperBound ?? 0) * 1.5, (värde ?? 0) * 1.1, 0.01)
             let x: (Double) -> CGFloat = { (v: Double) -> CGFloat in g.size.width * CGFloat(min(max(v / topp, 0), 1)) }
             ZStack(alignment: .leading) {
                 Capsule().fill(Tema.track.opacity(0.6))
