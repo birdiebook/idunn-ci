@@ -295,4 +295,23 @@ final class NightLayersTests: XCTestCase {
         XCTAssertEqual(r.source, .notification)
         XCTAssertNil(r.layers)
     }
+
+    /// BESLUT B141. Stunderna per stadium: spann som möts blir en stund, ett glapp gör två, och ett stadium som
+    /// saknas ger inget.
+    func testStundernaRäknasPerStadiumOchSpannSomMötsÄrEnStund() {
+        let spann: [NightLayers.StageSpan] = [
+            NightLayers.StageSpan(start: 0, end: 600, stage: .light, certainty: 2),
+            NightLayers.StageSpan(start: 600, end: 1800, stage: .deep, certainty: 2),
+            NightLayers.StageSpan(start: 1800, end: 2100, stage: .deep, certainty: 1),
+            NightLayers.StageSpan(start: 2100, end: 2400, stage: .light, certainty: 2),
+            NightLayers.StageSpan(start: 3000, end: 3300, stage: .deep, certainty: 2),
+        ]
+        let l = NightLayers.Layers(start: 0, end: 3300, minutes: [], gaps: [], period: 0...3300, asleep: [],
+                                   awake: [], coverage: nil, stages: spann)
+        XCTAssertEqual(l.stunder(.deep)?.antal, 2)
+        XCTAssertEqual(l.stunder(.deep)?.längst, 1500)
+        XCTAssertEqual(l.stunder(.light)?.antal, 2)
+        XCTAssertEqual(l.stunder(.light)?.längst, 600)
+        XCTAssertNil(l.stunder(.rem))
+    }
 }

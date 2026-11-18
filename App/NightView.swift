@@ -3,9 +3,9 @@ import Night
 import Sound
 
 /// BESLUT B62 · BESLUT B63 · BESLUT B71 · METOD M18 · METOD M32 · METOD M37 · METOD M50 · METOD M52 · METOD M56
-/// Natten (tryck på kurvan eller på Sömn-ringen): nattens kurva med axel, Sömnperiod · Sömn · Effektivitet, kortet Över
-/// natten (HRV, Hudtemp, Andning, Rörelse, Ljud och Slag för slag), Sömnpoängen med sina tre delar, stadierna mot ditt
-/// normala, medelpuls, rörelse och snarkning mot ditt normala, Sömnbehov, Effektivitet med uppvak, Sömnstress,
+/// Natten (tryck på kurvan eller på Sömn-ringen): Sömn och sömnperioden över kurvan, nattens kurva med axel, stadierna
+/// som fyra brickor mot ditt normala (BESLUT B141), kortet Över natten (HRV, Hudtemp, Andning, Rörelse, Ljud och Slag
+/// för slag), Sömnpoängen med sina tre delar, medelpuls, rörelse och snarkning mot ditt normala, Sömnbehov, Effektivitet med uppvak, Sömnstress,
 /// Regelbundenhet och veckan. Det som hör till spåret H ritas när dess tal finns (BESLUT B65): sömnbehovet och
 /// sömnbristen sedan H1, poängen sedan H2, stressen när H4 landar. Kortet "Ditt fönster" visas inte (BESLUT B71).
 /// Nattens detaljerade kurva med puls, HRV och andning var för sig nås från listan Nätter på Data (`NightCurveView`).
@@ -114,23 +114,22 @@ struct NightStack: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // BESLUT B141. Sömnen står över kurvan; ett valt stadium tar dess plats.
+            nattHuvud
+                .padding(.top, 10)
             NattKurva(curve: bundle?.curve, layers: layers, höjd: 220, axel: true, valt: valt, peka: true)
                 .padding(.horizontal, -16)
                 .padding(.top, 6)
-            if hasStages {
-                // BESLUT B83. Samma stadium igen släcker, ett annat byter.
-                StadieTecken(valt: valt, välj: { (s: SleepStage) -> Void in valt = valt == s ? nil : s })
-                    .padding(.top, 2)
+            if harStadietal {
+                brickor.padding(.top, 8)
+                stunderRad.padding(.top, 8)
             }
-            siffror
-            lagerkort.padding(.bottom, 12)
+            lagerkort.padding(.top, 10).padding(.bottom, 12)
             // BESLUT B65. Poängen (H2) ritas bara när talet finns.
             if h.sleepScore != nil {
                 Sektion(text: "Sömnpoäng")
                 poäng.padding(.top, 10).padding(.bottom, 12)
             }
-            Sektion(text: "Stadier mot ditt normala")
-            stadier.padding(.top, 10)
             Sektion(text: "Puls, rörelse och ljud")
             pulsRörelseLjud.padding(.top, 10)
             if h.needHours != nil {
@@ -180,48 +179,96 @@ struct NightStack: View {
         }
     }
 
-    private var siffror: some View {
-        HStack(alignment: .top) {
-            // METOD M55 · BESLUT B70. Märket: sömnperioden är användaren ändring.
-            stat("Sömnperiod", periodMinuter.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–",
-                 märke: summary.isEdited, under: saknas)
-            Spacer()
-            stat("Sömn", summary.sleepMinutes.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
-            Spacer()
-            stat("Effektivitet", summary.efficiency.map { (e: Double) -> String in "\(Int(e.rounded()))%" } ?? "–")
+    /// BESLUT B141. Toppen över kurvan. Utan valt stadium: Sömn stort, och till höger perioden som klockslag med dess
+    /// längd och effektiviteten. Med ett valt stadium: stadiets tid stort, andelen av natten och ditt normala.
+    @ViewBuilder private var nattHuvud: some View {
+        if let s = valt, let r = stadierad(s) {
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 2) {
+                    etikett(r.namn, färg: r.färg)
+                    Text(r.minuter.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
+                        .font(Tema.mono(34, .bold))
+                        .foregroundStyle(Tema.text)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(r.andel.map { (a: Double) -> String in "\(Int((a * 100).rounded())) % av natten" } ?? " ")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Tema.text)
+                    Text(normaltText(r))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Tema.dim)
+                }
+                .lineLimit(1)
+            }
+            .frame(minHeight: 62, alignment: .bottom)
+        } else {
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 2) {
+                    etikett("Sömn", färg: nil)
+                    Text(summary.sleepMinutes.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
+                        .font(Tema.mono(34, .bold))
+                        .foregroundStyle(summary.sleepMinutes == nil ? Tema.faint : Tema.text)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 4) {
+                        // METOD M55 · BESLUT B70. Märket: sömnperioden är användaren ändring.
+                        if summary.isEdited {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Tema.accent)
+                                .accessibilityLabel("Ändrad")
+                        }
+                        Text(klockslag ?? "–")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Tema.text)
+                    }
+                    Text(periodText)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Tema.dim)
+                    if let u = saknas {
+                        HStack(spacing: 3) {
+                            Image(systemName: "exclamationmark.circle")
+                                .font(.system(size: 9, weight: .bold))
+                            Text(u)
+                                .font(.system(size: 11))
+                        }
+                        .foregroundStyle(Tema.yellow)
+                    }
+                }
+                .lineLimit(1)
+            }
+            .frame(minHeight: 62, alignment: .bottom)
         }
-        .padding(.vertical, 14)
     }
 
-    private func stat(_ namn: String, _ värde: String, märke: Bool = false, under: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text(namn.uppercased())
-                    .font(.system(size: 10))
-                    .tracking(1)
-                    .foregroundStyle(Tema.faint)
-                if märke {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Tema.accent)
-                        .accessibilityLabel("Ändrad")
-                }
+    private func etikett(_ namn: String, färg: Color?) -> some View {
+        HStack(spacing: 6) {
+            if let f = färg {
+                RoundedRectangle(cornerRadius: 2).fill(f).frame(width: 9, height: 9)
             }
-            Text(värde)
-                .font(Tema.mono(20, .bold))
-                .foregroundStyle(värde == "–" ? Tema.faint : Tema.text)
-            if let u = under {
-                HStack(spacing: 3) {
-                    Image(systemName: "exclamationmark.circle")
-                        .font(.system(size: 9, weight: .bold))
-                    Text(u)
-                        .font(.system(size: 10))
-                        .lineLimit(1)
-                        .fixedSize()
-                }
-                .foregroundStyle(Tema.yellow)
-            }
+            Text(namn.uppercased())
+                .font(.system(size: 10.5))
+                .tracking(1.4)
+                .foregroundStyle(Tema.faint)
         }
+    }
+
+    /// Sömnperioden som klockslag, "23:10–06:55", ur lagren eller ur nattens början och slut.
+    private var klockslag: String? {
+        if let l = layers {
+            return Fmt.clock(date: Date(timeIntervalSince1970: l.period.lowerBound)) + "–"
+                + Fmt.clock(date: Date(timeIntervalSince1970: l.period.upperBound))
+        }
+        if let a = summary.start, let b = summary.end { return Fmt.clock(date: a) + "–" + Fmt.clock(date: b) }
+        return nil
+    }
+
+    private var periodText: String {
+        let längd: String = periodMinuter.map { (m: Double) -> String in "period " + Fmt.hm(minutes: m) } ?? "period –"
+        guard let e = summary.efficiency else { return längd }
+        return längd + " · \(Int(e.rounded())) % effektiv"
     }
 
     // MARK: Över natten
@@ -337,91 +384,151 @@ struct NightStack: View {
 
     // MARK: Stadierna, puls, rörelse och ljud mot ditt normala
 
-    /// BESLUT B93. Stadierna som en helhet: natten som en delad stapel i stadiernas färger, ditt normala som en tunn
-    /// stapel under (områdenas mitt), och talen i fyra kolumner. Under talet står avvikelsen från områdets närmaste
-    /// kant när stadiet ligger utanför (gul sämre, blå bättre, som bandraden), annars andelen av natten.
-    private var stadier: some View {
-        let rader: [(String, Trends.Measure, Double?, Int, SleepStage)] = [
-            ("Vaken", .awakeTime, summary.awakeMinutes, -1, .wake), ("Lätt", .lightSleep, summary.lightMinutes, 1, .light),
-            ("Djup", .deepSleep, summary.deepMinutes, 1, .deep), ("REM", .remSleep, summary.remMinutes, 1, .rem),
-        ]
-        let områden: [ClosedRange<Double>?] = rader.map { (r: (String, Trends.Measure, Double?, Int, SleepStage))
-            -> ClosedRange<Double>? in
-            r.2 == nil ? nil : nr(r.1)?.range
+    /// Ett stadium med nattens minuter, andelen av stadiernas summa och ditt normala (områdets mitt och området).
+    /// `bra` är 1 när mer är bättre (sömnens stadier) och −1 när mindre är bättre (vaken).
+    struct Stadierad {
+        var stadium: SleepStage
+        var namn: String
+        var färg: Color
+        var minuter: Double?
+        var andel: Double?
+        var område: ClosedRange<Double>?
+        var bra: Int
+
+        var normalt: Double? { område.map { (o: ClosedRange<Double>) -> Double in (o.lowerBound + o.upperBound) / 2 } }
+        /// Skillnaden mot det normala i minuter.
+        var skillnad: Double? {
+            guard let v = minuter, let n = normalt else { return nil }
+            return v - n
         }
-        let total: Double = rader.reduce(0) { (s: Double, r: (String, Trends.Measure, Double?, Int, SleepStage))
-            -> Double in
-            s + (r.2 ?? 0)
+        /// −1 sämre än området, 0 inom, 1 bättre än området; `nil` utan område.
+        var läge: Int? {
+            guard let v = minuter, let o = område else { return nil }
+            if o.contains(v) { return 0 }
+            return (v > o.upperBound) == (bra > 0) ? 1 : -1
         }
-        let natt: [(Double, Color)] = rader.map { (r: (String, Trends.Measure, Double?, Int, SleepStage))
-            -> (Double, Color) in
-            (r.2 ?? 0, NattRitning.färg(r.4))
-        }
-        // Ditt normala ritas bara när alla fyra har ett område: annars vore delarna inte en hel natt.
-        let harNormalt: Bool = !områden.contains { (o: ClosedRange<Double>?) -> Bool in o == nil }
-        let normalt: [(Double, Color)] = (0..<rader.count).map { (i: Int) -> (Double, Color) in
-            let mitt: Double = områden[i].map { (o: ClosedRange<Double>) -> Double in
-                (o.lowerBound + o.upperBound) / 2
-            } ?? 0
-            return (mitt, NattRitning.färg(rader[i].4))
-        }
-        return VStack(alignment: .leading, spacing: 0) {
-            Delstapel(delar: natt, höjd: 16)
-            if harNormalt {
-                Delstapel(delar: normalt, höjd: 5)
-                    .opacity(0.55)
-                    .padding(.top, 5)
-            }
-            HStack(alignment: .top, spacing: 6) {
-                ForEach(0..<rader.count, id: \.self) { (i: Int) in
-                    stadiekolumn(rader[i].0, rader[i].2, områden[i], bra: rader[i].3,
-                                 färg: NattRitning.färg(rader[i].4), total: total)
-                }
-            }
-            .padding(.top, 14)
-            if harNormalt {
-                HStack(spacing: 12) {
-                    Tecken(färg: Tema.dim, text: "i natt")
-                    Tecken(färg: Tema.dim.opacity(0.55), text: "ditt normala", smal: true)
-                }
-                .font(.system(size: 10))
-                .foregroundStyle(Tema.dim)
-                .padding(.top, 10)
-            }
-        }
-        .kort()
     }
 
-    private func stadiekolumn(_ namn: String, _ värde: Double?, _ område: ClosedRange<Double>?, bra: Int, färg: Color,
-                              total: Double) -> some View {
-        // Avvikelsen i minuter från områdets närmaste kant; 0 inom området eller utan område.
-        var avvikelse: Double = 0
-        if let v = värde, let o = område {
-            if v < o.lowerBound { avvikelse = v - o.lowerBound }
-            if v > o.upperBound { avvikelse = v - o.upperBound }
+    private static let stadieordning: [(SleepStage, String, Trends.Measure, Int)] = [
+        (.wake, "Vaken", .awakeTime, -1), (.light, "Lätt", .lightSleep, 1), (.deep, "Djup", .deepSleep, 1),
+        (.rem, "REM", .remSleep, 1),
+    ]
+
+    private func minuter(_ s: SleepStage) -> Double? {
+        switch s {
+        case .wake: return summary.awakeMinutes
+        case .light: return summary.lightMinutes
+        case .deep: return summary.deepMinutes
+        case .rem: return summary.remMinutes
         }
-        let sämre: Bool = (avvikelse > 0) != (bra > 0)
-        var under: String = " "
-        if let v = värde {
-            if avvikelse != 0 {
-                under = (avvikelse > 0 ? "+" : "−") + Fmt.hm(minutes: abs(avvikelse))
-            } else if total > 0 {
-                under = "\(Int((v / total * 100).rounded())) %"
+    }
+
+    private var stadierader: [Stadierad] {
+        let total: Double = Self.stadieordning.reduce(0) { (t: Double, r: (SleepStage, String, Trends.Measure, Int))
+            -> Double in
+            t + (minuter(r.0) ?? 0)
+        }
+        return Self.stadieordning.map { (r: (SleepStage, String, Trends.Measure, Int)) -> Stadierad in
+            let v: Double? = minuter(r.0)
+            return Stadierad(stadium: r.0, namn: r.1, färg: NattRitning.färg(r.0), minuter: v,
+                             andel: v.flatMap { (m: Double) -> Double? in total > 0 ? m / total : nil },
+                             område: v == nil ? nil : nr(r.2)?.range, bra: r.3)
+        }
+    }
+
+    private func stadierad(_ s: SleepStage) -> Stadierad? {
+        stadierader.first { (r: Stadierad) -> Bool in r.stadium == s }
+    }
+
+    private var harStadietal: Bool {
+        stadierader.contains { (r: Stadierad) -> Bool in r.minuter != nil }
+    }
+
+    /// "normalt 1:32 (+0:12)", eller "inget normalt än" innan området finns.
+    private func normaltText(_ r: Stadierad) -> String {
+        guard let n = r.normalt else { return "inget normalt än" }
+        guard let d = r.skillnad else { return "normalt " + Fmt.hm(minutes: n) }
+        return "normalt " + Fmt.hm(minutes: n) + " (" + Self.medTecken(d) + ")"
+    }
+
+    /// "+0:12", "−0:08", eller "±0" när skillnaden är under en halv minut.
+    static func medTecken(_ minuter: Double) -> String {
+        let m: Double = minuter.rounded()
+        if m == 0 { return "±0" }
+        return (m > 0 ? "+" : "−") + Fmt.hm(minutes: abs(m))
+    }
+
+    static func lägesfärg(_ läge: Int?) -> Color {
+        switch läge {
+        case .some(1): return Tema.accent
+        case .some(-1): return Tema.yellow
+        default: return Tema.faint
+        }
+    }
+
+    /// BESLUT B141. Fyra brickor under kurvan: stadiet, nattens tid, en remsa med ditt normala område och en
+    /// markering för natten, och skillnaden mot det normala. Skillnaden får färg bara utanför området (gul sämre,
+    /// blå bättre, som bandraden). Ett tryck väljer stadiet (BESLUT B83); samma igen släcker.
+    private var brickor: some View {
+        HStack(spacing: 8) {
+            ForEach(stadierader, id: \.stadium) { (r: Stadierad) in
+                Button {
+                    valt = valt == r.stadium ? nil : r.stadium
+                } label: {
+                    bricka(r)
+                }
+                .buttonStyle(Tryckyta())
+                .disabled(!hasStages)
+                .accessibilityAddTraits(valt == r.stadium ? .isSelected : [])
             }
         }
-        return VStack(alignment: .leading, spacing: 3) {
-            Tecken(färg: färg, text: namn)
-                .font(.system(size: 11))
-                .foregroundStyle(Tema.dim)
-            Text(värde.map { (v: Double) -> String in Fmt.hm(minutes: v) } ?? "–")
-                .font(Tema.mono(17, .bold))
-                .foregroundStyle(värde == nil ? Tema.faint : Tema.text)
+    }
+
+    private func bricka(_ r: Stadierad) -> some View {
+        let vald: Bool = valt == r.stadium
+        let under: String = r.skillnad.map { (d: Double) -> String in Self.medTecken(d) }
+            ?? r.andel.map { (a: Double) -> String in "\(Int((a * 100).rounded())) %" } ?? " "
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                RoundedRectangle(cornerRadius: 2).fill(r.färg).frame(width: 8, height: 8)
+                Text(r.namn)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Tema.dim)
+            }
+            Text(r.minuter.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
+                .font(Tema.mono(18, .bold))
+                .foregroundStyle(r.minuter == nil ? Tema.faint : Tema.text)
+            Normalremsa(värde: r.minuter, område: r.område, färg: r.färg)
+                .frame(height: 5)
+                .padding(.vertical, 2)
             Text(under)
                 .font(Tema.mono(11))
-                .foregroundStyle(avvikelse == 0 ? Tema.faint : (sämre ? Tema.yellow : Tema.accent))
+                .foregroundStyle(r.skillnad == nil ? Tema.faint : Self.lägesfärg(r.läge))
         }
         .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Tema.card, in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12).strokeBorder(vald ? r.färg : Color.clear, lineWidth: 1.5)
+        }
+        .opacity(valt == nil || vald ? 1 : 0.4)
+        .contentShape(Rectangle())
+    }
+
+    /// BESLUT B141. Under brickorna när ett stadium är valt: hur många stunder, den längsta och snittet.
+    private var stunderRad: some View {
+        var text: String = " "
+        if let s = valt, let t = layers?.stunder(s) {
+            text = "\(t.antal) \(t.antal == 1 ? "stund" : "stunder") · längsta \(Int((t.längst / 60).rounded())) min"
+            if let m = minuter(s) { text += " · snitt \(Int((m / Double(t.antal)).rounded())) min" }
+        }
+        return Text(text)
+            .font(.system(size: 12.5))
+            .foregroundStyle(Tema.dim)
+            .lineLimit(1)
     }
 
     private var pulsRörelseLjud: some View {
@@ -772,5 +879,38 @@ struct Fördelning: View {
             }
         }
         .frame(height: 10)
+    }
+}
+
+/// BESLUT B141. En tunn remsa för ett stadium: ditt normala område som ett ljusare fält och natten som ett streck i
+/// stadiets färg. Skalan går från noll till det största av områdets övre kant gånger 1,5 och natten gånger 1,1, så att
+/// området hamnar ungefär mitt i och natten alltid syns. Utan område ritas bara spåret och strecket.
+struct Normalremsa: View {
+    let värde: Double?
+    let område: ClosedRange<Double>?
+    let färg: Color
+
+    var body: some View {
+        GeometryReader { (g: GeometryProxy) in
+            let topp: Double = max((område?.upperBound ?? 0) * 1.5, (värde ?? 0) * 1.1, 1)
+            let x: (Double) -> CGFloat = { (v: Double) -> CGFloat in g.size.width * CGFloat(min(max(v / topp, 0), 1)) }
+            ZStack(alignment: .leading) {
+                Capsule().fill(Tema.track.opacity(0.6))
+                if let o = område {
+                    Capsule()
+                        .fill(Tema.dim.opacity(0.45))
+                        .frame(width: max(x(o.upperBound) - x(o.lowerBound), 3))
+                        .offset(x: x(o.lowerBound))
+                }
+                if let v = värde {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(färg)
+                        .frame(width: 3, height: g.size.height + 4)
+                        .offset(x: min(max(x(v) - 1.5, 0), g.size.width - 3))
+                }
+            }
+            .frame(height: g.size.height)
+        }
+        .accessibilityHidden(true)
     }
 }

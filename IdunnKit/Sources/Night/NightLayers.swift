@@ -142,6 +142,23 @@ public enum NightLayers {
         public func stage(at t: TimeInterval) -> NightLayers.StageSpan? {
             stages.first { (s: NightLayers.StageSpan) -> Bool in s.start <= t && t < s.end }
         }
+
+        /// BESLUT B141. Stadiets stunder i natten: hur många, och den längsta i sekunder. Två spann med samma stadium
+        /// som möts (inom en sekund) räknas som en stund; ett glapp mellan dem gör två. `nil` när stadiet inte finns.
+        public func stunder(_ stage: SleepStage) -> (antal: Int, längst: TimeInterval)? {
+            var längder: [TimeInterval] = []
+            var slut: TimeInterval = -.infinity
+            for s in stages where s.stage == stage {
+                if !längder.isEmpty && s.start - slut <= 1 {
+                    längder[längder.count - 1] += s.end - s.start
+                } else {
+                    längder.append(s.end - s.start)
+                }
+                slut = s.end
+            }
+            guard let längst = längder.max() else { return nil }
+            return (längder.count, längst)
+        }
     }
 
     // MARK: Räkningen
