@@ -346,7 +346,6 @@ struct NightStack: View {
     // MARK: Stadierna, puls, rörelse och ljud mot ditt normala
 
     /// Ett stadium med nattens minuter, andelen av stadiernas summa (0–1) och andelens normalområde (METOD M81).
-    /// `bra` är 1 när mer är bättre (sömnens stadier) och −1 när mindre är bättre (vaken).
     struct Stadierad {
         var stadium: SleepStage
         var namn: String
@@ -354,19 +353,10 @@ struct NightStack: View {
         var minuter: Double?
         var andel: Double?
         var område: ClosedRange<Double>?
-        var bra: Int
-
-        /// −1 sämre än området, 0 inom, 1 bättre än området; `nil` utan område.
-        var läge: Int? {
-            guard let v = andel, let o = område else { return nil }
-            if o.contains(v) { return 0 }
-            return (v > o.upperBound) == (bra > 0) ? 1 : -1
-        }
     }
 
-    private static let stadieordning: [(SleepStage, String, Trends.Measure, Int)] = [
-        (.wake, "Vaken", .awakeTime, -1), (.light, "Lätt", .lightSleep, 1), (.deep, "Djup", .deepSleep, 1),
-        (.rem, "REM", .remSleep, 1),
+    private static let stadieordning: [(SleepStage, String, Trends.Measure)] = [
+        (.wake, "Vaken", .awakeTime), (.light, "Lätt", .lightSleep), (.deep, "Djup", .deepSleep), (.rem, "REM", .remSleep),
     ]
 
     private func minuter(_ s: SleepStage) -> Double? {
@@ -379,18 +369,18 @@ struct NightStack: View {
     }
 
     private var stadierader: [Stadierad] {
-        let total: Double = Self.stadieordning.reduce(0) { (t: Double, r: (SleepStage, String, Trends.Measure, Int))
+        let total: Double = Self.stadieordning.reduce(0) { (t: Double, r: (SleepStage, String, Trends.Measure))
             -> Double in
             t + (minuter(r.0) ?? 0)
         }
-        return Self.stadieordning.map { (r: (SleepStage, String, Trends.Measure, Int)) -> Stadierad in
+        return Self.stadieordning.map { (r: (SleepStage, String, Trends.Measure)) -> Stadierad in
             let v: Double? = minuter(r.0)
             // METOD M81. Området räknas i andelar ur nätterna före.
             let område: ClosedRange<Double>? = v == nil ? nil
                 : MorningCard.stageShare(r.2, day: day, idun: values)?.range
             return Stadierad(stadium: r.0, namn: r.1, färg: NattRitning.färg(r.0), minuter: v,
                              andel: v.flatMap { (m: Double) -> Double? in total > 0 ? m / total : nil },
-                             område: område, bra: r.3)
+                             område: område)
         }
     }
 
@@ -405,17 +395,9 @@ struct NightStack: View {
     /// Hårt mellanslag före procenttecknet, så att "7 %" aldrig bryts över två rader.
     static func procent(_ andel: Double) -> String { "\(Int((andel * 100).rounded()))\u{00A0}%" }
 
-    static func lägesfärg(_ läge: Int?) -> Color {
-        switch läge {
-        case .some(1): return Tema.accent
-        case .some(-1): return Tema.yellow
-        default: return Tema.dim
-        }
-    }
-
     /// BESLUT B141 · METOD M81. Fyra brickor under kurvan: stadiet, nattens tid med andelen till höger, och en remsa
-    /// med ditt normala område som andel av natten och ett streck för natten. Andelen får färg bara utanför området (gul
-    /// sämre, blå bättre, som bandraden). Ett tryck väljer stadiet (BESLUT B83); samma igen släcker.
+    /// med ditt normala område som andel av natten och ett streck för natten. Andelen är alltid grå: remsan bär
+    /// jämförelsen. Ett tryck väljer stadiet (BESLUT B83); samma igen släcker.
     private var brickor: some View {
         HStack(spacing: 8) {
             ForEach(stadierader, id: \.stadium) { (r: Stadierad) in
@@ -448,7 +430,7 @@ struct NightStack: View {
                 Spacer(minLength: 0)
                 Text(r.andel.map { (a: Double) -> String in Self.procent(a) } ?? "")
                     .font(Tema.mono(12))
-                    .foregroundStyle(Self.lägesfärg(r.läge))
+                    .foregroundStyle(Tema.dim)
                     .fixedSize()
             }
             Normalremsa(värde: r.andel, område: r.område, färg: r.färg)
