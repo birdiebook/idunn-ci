@@ -3,7 +3,7 @@ import Night
 import Sound
 
 /// BESLUT B62 · BESLUT B63 · BESLUT B71 · METOD M18 · METOD M32 · METOD M37 · METOD M50 · METOD M52 · METOD M56
-/// Natten (tryck på kurvan eller på Sömn-ringen): Sömn, sömnperiodens längd och effektiviteten över kurvan, nattens kurva med axel, stadierna
+/// Natten (tryck på kurvan eller på Sömn-ringen): Sömn över kurvan, nattens kurva med axel, stadierna
 /// som fyra brickor mot ditt normala (BESLUT B141), kortet Över natten (HRV, Hudtemp, Andning, Rörelse, Ljud och Slag
 /// för slag), Sömnpoängen med sina tre delar, medelpuls, rörelse och snarkning mot ditt normala, Sömnbehov, Effektivitet med uppvak, Sömnstress,
 /// Regelbundenhet och veckan. Det som hör till spåret H ritas när dess tal finns (BESLUT B65): sömnbehovet och
@@ -178,56 +178,32 @@ struct NightStack: View {
         }
     }
 
-    /// BESLUT B141. Toppen över kurvan. Utan valt stadium: Sömn stort, och till höger sömnperiodens längd och
-    /// effektiviteten; klockslagen står bara vid strecken under kurvan. Med ett valt stadium: stadiets tid stort,
-    /// andelen av natten och ditt normala.
-    @ViewBuilder private var nattHuvud: some View {
-        if let s = valt, let r = stadierad(s) {
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 2) {
-                    etikett(r.namn, färg: r.färg)
-                    Text(r.minuter.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
-                        .font(Tema.mono(34, .bold))
-                        .foregroundStyle(Tema.text)
-                }
-                Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(r.andel.map { (a: Double) -> String in Self.procent(a) + " av natten" } ?? " ")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Tema.text)
-                    Text(normaltText(r))
-                        .font(.system(size: 13))
-                        .foregroundStyle(Tema.dim)
-                }
-                .lineLimit(1)
+    /// BESLUT B141. Toppen över kurvan: Sömn stort, eller det valda stadiets tid. Inget till höger (användaren
+    /// 2026-11-18: perioden, effektiviteten och stadiets andel och normala står inte här), utom märket för en ändrad
+    /// period och "början/slutet saknas", som bara syns när de gäller.
+    private var nattHuvud: some View {
+        let r: Stadierad? = valt.flatMap { (s: SleepStage) -> Stadierad? in stadierad(s) }
+        let minuter: Double? = r.map { (x: Stadierad) -> Double? in x.minuter } ?? summary.sleepMinutes
+        return HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 2) {
+                etikett(r?.namn ?? "Sömn", färg: r?.färg)
+                Text(minuter.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
+                    .font(Tema.mono(34, .bold))
+                    .foregroundStyle(minuter == nil ? Tema.faint : Tema.text)
             }
-            .frame(minHeight: 62, alignment: .bottom)
-        } else {
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 2) {
-                    etikett("Sömn", färg: nil)
-                    Text(summary.sleepMinutes.map { (m: Double) -> String in Fmt.hm(minutes: m) } ?? "–")
-                        .font(Tema.mono(34, .bold))
-                        .foregroundStyle(summary.sleepMinutes == nil ? Tema.faint : Tema.text)
-                }
-                Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 2) {
-                    HStack(spacing: 4) {
-                        // METOD M55 · BESLUT B70. Märket: sömnperioden är användaren ändring.
-                        if summary.isEdited {
+            Spacer(minLength: 8)
+            if r == nil {
+                VStack(alignment: .trailing, spacing: 3) {
+                    // METOD M55 · BESLUT B70. Märket: sömnperioden är användaren ändring.
+                    if summary.isEdited {
+                        HStack(spacing: 3) {
                             Image(systemName: "pencil")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(Tema.accent)
-                                .accessibilityLabel("Ändrad")
+                                .font(.system(size: 9, weight: .bold))
+                            Text("ändrad")
+                                .font(.system(size: 11))
                         }
-                        Text(periodMinuter.map { (m: Double) -> String in "period " + Fmt.hm(minutes: m) }
-                             ?? "period –")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Tema.text)
+                        .foregroundStyle(Tema.accent)
                     }
-                    Text(summary.efficiency.map { (e: Double) -> String in "\(Int(e.rounded())) % effektiv" } ?? " ")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Tema.dim)
                     if let u = saknas {
                         HStack(spacing: 3) {
                             Image(systemName: "exclamationmark.circle")
@@ -240,8 +216,8 @@ struct NightStack: View {
                 }
                 .lineLimit(1)
             }
-            .frame(minHeight: 62, alignment: .bottom)
         }
+        .frame(minHeight: 62, alignment: .bottom)
     }
 
     private func etikett(_ namn: String, färg: Color?) -> some View {
@@ -427,12 +403,6 @@ struct NightStack: View {
     }
 
     static func procent(_ andel: Double) -> String { "\(Int((andel * 100).rounded())) %" }
-
-    /// "normalt 19–24 %", eller "inget normalt än" innan området finns.
-    private func normaltText(_ r: Stadierad) -> String {
-        guard let o = r.område else { return "inget normalt än" }
-        return "normalt \(Int((o.lowerBound * 100).rounded()))–" + Self.procent(o.upperBound)
-    }
 
     static func lägesfärg(_ läge: Int?) -> Color {
         switch läge {
