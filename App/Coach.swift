@@ -308,7 +308,7 @@ final class CoachModell: ObservableObject {
     func kopplaFrån() {
         glömKopplingen()
         läge.fel = nil
-        DygnskopiaModell.shared.kopplingenÄndrad()
+        Task { @MainActor in DygnskopiaModell.shared.kopplingenÄndrad() }
     }
 
     private func glömKopplingen() {
