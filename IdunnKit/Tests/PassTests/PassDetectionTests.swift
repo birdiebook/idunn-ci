@@ -49,9 +49,9 @@ final class PassDetectionTests: XCTestCase {
         XCTAssertEqual(p.elevatedMinutes, 50)
         XCTAssertEqual(p.meanReserve, 55.0 / 140, accuracy: 1e-9)
         XCTAssertNil(p.kind)
-        // 19 minuter räcker inte; 20 gör det.
-        XCTAssertEqual(hitta(dag(minuter(200, 19, puls: 105, rörelse: 0.5))), [])
-        XCTAssertEqual(hitta(dag(minuter(200, 20, puls: 105, rörelse: 0.5))).count, 1)
+        // 9 minuter räcker inte; 10 gör det (användaren 2026-11-19: en promenad på tio minuter är ett pass).
+        XCTAssertEqual(hitta(dag(minuter(200, 9, puls: 105, rörelse: 0.5))), [])
+        XCTAssertEqual(hitta(dag(minuter(200, 10, puls: 105, rörelse: 0.5))).count, 1)
         // Rörelsens median under 0,2 g är inget lätt pass; 0,2 räcker.
         XCTAssertEqual(hitta(dag(minuter(200, 50, puls: 105, rörelse: 0.19))), [])
         XCTAssertEqual(hitta(dag(minuter(200, 50, puls: 105, rörelse: 0.2))).count, 1)
@@ -200,6 +200,7 @@ final class PassDetectionTests: XCTestCase {
     func testEgnaTrösklar() {
         var regler = PassDetection.Rules()
         regler.minElevatedMinutes = 20
+        regler.minLightMinutes = 20
         let m = dag(minuter(200, 15, puls: 150))
         XCTAssertEqual(PassDetection.candidates(m, restingPulse: 50, maxPulse: 190, rules: regler), [])
         XCTAssertEqual(PassDetection.candidates(m, restingPulse: 50, maxPulse: 190).count, 1)

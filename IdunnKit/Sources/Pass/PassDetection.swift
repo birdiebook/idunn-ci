@@ -48,7 +48,7 @@ public enum PassDetection {
         /// ansträngning),
         public var lightReserve = 0.30
         /// har minst så här många sådana minuter (avbrotten och andelen som för ett måttligt pass),
-        public var minLightMinutes = 20
+        public var minLightMinutes = 10
         /// och rörelsens median över periodens minuter ligger minst så här högt (g, METOD M24).
         public var movingMovement = 0.2
 
