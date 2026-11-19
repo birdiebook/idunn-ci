@@ -1,0 +1,4 @@
+31b0e773f72c10c436645892b16a31b2f15a1747 spegel 2026-11-19T14:28:55Z run 44543876514
+== app (xcodebuild build-for-testing, simulator)
+RÖTT: bygget föll (kod 65),        1 felrader
+App/Coach.swift:311:33: error: call to main actor-isolated instance method 'kopplingenÄndrad()' in a synchronous nonisolated context
