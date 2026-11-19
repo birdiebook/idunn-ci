@@ -2,8 +2,8 @@ import Foundation
 import XCTest
 @testable import Pass
 
-// BESLUT B120 · BESLUT B142 · METOD M69. Pass som hittas av sig själva. Alla dygn nedan är påhittade
-// (CLAUDE.md §Dataregeln). Vilopuls 50 och maxpuls 190: 30 % av pulsreserven är 92 slag, 40 % är 106, 60 % är 134.
+// BESLUT B120 · METOD M69. Pass som hittas av sig själva. Alla dygn nedan är påhittade (CLAUDE.md §Dataregeln).
+// Vilopuls 50 och maxpuls 190: 40 % av pulsreserven är 106 slag, 60 % är 134.
 
 final class PassDetectionTests: XCTestCase {
     typealias Minut = PassDetection.Minute
@@ -33,65 +33,9 @@ final class PassDetectionTests: XCTestCase {
 
     func testEnVardagUtanPassGerInget() {
         XCTAssertEqual(hitta(dag([])), [])
-        // Under den lägre gränsen en hel timme, också i rörelse: 90 slag är 29 % av reserven.
-        XCTAssertEqual(hitta(dag(minuter(100, 60, puls: 90, rörelse: 0.5))), [])
-        // Över den men under 40 %, med vardagens rörelse: 105 slag är 39 % av reserven, och handen rör sig lite.
-        XCTAssertEqual(hitta(dag(minuter(100, 60, puls: 105, rörelse: 0.08))), [])
+        // Under gränsen hela dagen, också i rörelse: 105 slag är 39 % av reserven.
+        XCTAssertEqual(hitta(dag(minuter(100, 60, puls: 105))), [])
         XCTAssertEqual(hitta([]), [])
-    }
-
-    func testEttLättPassIRörelseHittas() throws {
-        // BESLUT B142. 50 minuter i 105 slag (39 %, under gränsen för förhöjd) med handen i rörelse: golf eller en
-        // lång promenad.
-        let p = try XCTUnwrap(hitta(dag(minuter(200, 50, puls: 105, rörelse: 0.5))).first)
-        XCTAssertEqual(p.startMinute, m0 + 200)
-        XCTAssertEqual(p.endMinute, m0 + 249)
-        XCTAssertEqual(p.elevatedMinutes, 50)
-        XCTAssertEqual(p.meanReserve, 55.0 / 140, accuracy: 1e-9)
-        XCTAssertNil(p.kind)
-        // 9 minuter räcker inte; 10 gör det (användaren 2026-11-19: en promenad på tio minuter är ett pass).
-        XCTAssertEqual(hitta(dag(minuter(200, 9, puls: 105, rörelse: 0.5))), [])
-        XCTAssertEqual(hitta(dag(minuter(200, 10, puls: 105, rörelse: 0.5))).count, 1)
-        // Rörelsens median under 0,2 g är inget lätt pass; 0,2 räcker.
-        XCTAssertEqual(hitta(dag(minuter(200, 50, puls: 105, rörelse: 0.19))), [])
-        XCTAssertEqual(hitta(dag(minuter(200, 50, puls: 105, rörelse: 0.2))).count, 1)
-        // Utan rörelse att läsa går det inte att se att handen rör sig.
-        XCTAssertEqual(hitta(dag(minuter(200, 50, puls: 105, rörelse: nil))), [])
-        // Fem hårda minuter i en lång lätt runda gör den inte till kondition: typen kräver tio förhöjda minuter.
-        let toppar = dag(minuter(200, 50, puls: 105, rörelse: 0.5) + minuter(220, 5, puls: 150, rörelse: 0.5))
-        let q = try XCTUnwrap(hitta(toppar).first)
-        XCTAssertEqual(q.minutes, 50)
-        XCTAssertNil(q.kind)
-    }
-
-    func testEttLättPassTarÖverDeMåttligaDetRör() throws {
-        // En runda på 60 minuter i 100 slag (36 %) med en backe på 12 minuter i 120 slag (50 %) mitt i: förslaget är
-        // hela rundan, inte backen.
-        let runda = minuter(200, 60, puls: 100, rörelse: 0.5) + minuter(224, 12, puls: 120, rörelse: 0.5)
-        let funna = hitta(dag(runda))
-        XCTAssertEqual(funna.map { $0.startMinute }, [m0 + 200])
-        XCTAssertEqual(funna.map { $0.minutes }, [60])
-        XCTAssertNil(funna.first?.kind)
-        // Löpning med uppvärmning och nedvarvning: hela passet, och fortfarande kondition (typen gissas på de
-        // förhöjda minuterna).
-        let löpning = minuter(200, 15, puls: 100, rörelse: 0.5) + minuter(215, 20, puls: 150, rörelse: 0.5)
-            + minuter(235, 15, puls: 100, rörelse: 0.5)
-        let p = try XCTUnwrap(hitta(dag(löpning)).first)
-        XCTAssertEqual(p.minutes, 50)
-        XCTAssertEqual(p.elevatedMinutes, 50)
-        XCTAssertEqual(p.kind, .kondition)
-    }
-
-    func testUtanHandenIRörelseStårDetMåttligaPassetKvar() throws {
-        // Cykling: handen rör sig lite. Uppvärmningen i 100 slag ger inget lätt pass, och passet i 150 slag hittas
-        // som förut, utan uppvärmningen.
-        let cykel = minuter(200, 15, puls: 100, rörelse: 0.05) + minuter(215, 30, puls: 150, rörelse: 0.05)
-        let funna = hitta(dag(cykel))
-        XCTAssertEqual(funna.count, 1)
-        let p = try XCTUnwrap(funna.first)
-        XCTAssertEqual(p.startMinute, m0 + 215)
-        XCTAssertEqual(p.minutes, 30)
-        XCTAssertEqual(p.kind, .kondition)
     }
 
     func testEttKonditionspassHittasMedStartOchSlut() throws {
@@ -200,7 +144,6 @@ final class PassDetectionTests: XCTestCase {
     func testEgnaTrösklar() {
         var regler = PassDetection.Rules()
         regler.minElevatedMinutes = 20
-        regler.minLightMinutes = 20
         let m = dag(minuter(200, 15, puls: 150))
         XCTAssertEqual(PassDetection.candidates(m, restingPulse: 50, maxPulse: 190, rules: regler), [])
         XCTAssertEqual(PassDetection.candidates(m, restingPulse: 50, maxPulse: 190).count, 1)

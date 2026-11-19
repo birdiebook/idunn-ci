@@ -27,6 +27,8 @@ struct DataView: View {
     @ObservedObject private var kondition = KonditionModell.shared
     /// BESLUT B127. Coachen: kopplingen, reglaget och vad som skickats.
     @ObservedObject private var coach = CoachModell.shared
+    /// BESLUT B143. Utvecklingskopian: reglaget och vad som laddats upp.
+    @ObservedObject private var kopia = DygnskopiaModell.shared
     /// BESLUT B130. Dagboken: kvällens taggar och morgonens skattning.
     @ObservedObject private var dagbok = DagbokModell.shared
     @State private var importing = false
@@ -55,6 +57,8 @@ struct DataView: View {
             onCoachPå: { (på: Bool) -> Void in coach.sätt(på: på) },
             onCoachSkicka: { () -> Void in coach.synka(tvinga: true) },
             onCoachFrån: { () -> Void in coach.kopplaFrån() },
+            kopia: kopia.läge,
+            onKopiaPå: { (på: Bool) -> Void in kopia.sätt(på: på) },
             dagbok: dagbok.låst ? nil : dagbok.dagbok,
             onKväll: { dagbok.öppnaKväll() },
             onMorgon: { dagbok.öppnaMorgon() }
@@ -132,6 +136,9 @@ struct DataScreen: View {
     var onCoachPå: (Bool) -> Void = { _ in }
     var onCoachSkicka: () -> Void = {}
     var onCoachFrån: () -> Void = {}
+    /// BESLUT B143. Utvecklingskopian: läget (`nil` döljer raderna) och reglaget.
+    var kopia: DygnskopiaModell.Läge?
+    var onKopiaPå: (Bool) -> Void = { _ in }
     /// BESLUT B130 · METOD M75. Dagboken och vägen till kvällens blad och morgonens fråga. `nil` (förval) döljer sektionen.
     var dagbok: Journal?
     var onKväll: () -> Void = {}
@@ -158,7 +165,7 @@ struct DataScreen: View {
             // BESLUT B127. Coachen: det enda Idunn skickar av sig själv, och bara sammanfattningar.
             if let coach {
                 CoachSektion(läge: coach, onKoppla: onCoachKoppla, onPå: onCoachPå, onSkicka: onCoachSkicka,
-                             onFrån: onCoachFrån)
+                             onFrån: onCoachFrån, kopia: kopia, onKopiaPå: onKopiaPå)
             }
 
             // BESLUT B130. Dagboken: hur mycket som är loggat, och vägen till att ändra ett svar.
@@ -325,6 +332,9 @@ struct CoachSektion: View {
     var onPå: (Bool) -> Void = { _ in }
     var onSkicka: () -> Void = {}
     var onFrån: () -> Void = {}
+    /// BESLUT B143 · METOD M82. Utvecklingskopian: dygnens arkiv till din egen databas (`nil` döljer raderna).
+    var kopia: DygnskopiaModell.Läge?
+    var onKopiaPå: (Bool) -> Void = { _ in }
 
     var body: some View {
         Section {
@@ -343,7 +353,9 @@ struct CoachSektion: View {
                     .disabled(läge.arbetar)
                 Button("Koppla från", role: .destructive) { onFrån() }
                     .disabled(läge.arbetar)
+                if let kopia { kopiaRader(kopia) }
             } else {
+                if let kopia { kopiaRader(kopia) }
                 Button {
                     onKoppla()
                 } label: {
@@ -365,6 +377,40 @@ struct CoachSektion: View {
         } footer: {
             Text(fot)
         }
+    }
+
+    /// BESLUT B143. Reglaget Utvecklingskopia och en rad om vad som laddats upp.
+    @ViewBuilder
+    private func kopiaRader(_ k: DygnskopiaModell.Läge) -> some View {
+        Toggle(isOn: Binding(get: { () -> Bool in k.på }, set: { (ny: Bool) -> Void in onKopiaPå(ny) })) {
+            Label("Utvecklingskopia", systemImage: "externaldrive.badge.icloud")
+        }
+        HStack {
+            Text(kopiaStatus(k))
+            Spacer()
+            if k.arbetar { ProgressView() }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        if let fel = k.fel {
+            Text(fel)
+                .font(.footnote)
+                .foregroundStyle(.red)
+        }
+    }
+
+    /// BESLUT B143. "12 dygn · 24 av 500 MB" och när det senast lyckades, eller att kopplingen väntas.
+    private func kopiaStatus(_ k: DygnskopiaModell.Läge) -> String {
+        if !k.kopplad { return "Väntar på kopplingen" }
+        if !k.på { return "Av" }
+        guard let dygn = k.dygn, let mb = k.megabyte, let tak = k.tak else {
+            return k.arbetar ? "Laddar upp …" : "Inget uppladdat än"
+        }
+        var text: String = "\(dygn) dygn · \(Int(mb.rounded())) av \(Int(tak.rounded())) MB"
+        if let senast = k.senast {
+            text += " · " + senast.formatted(date: .abbreviated, time: .shortened)
+        }
+        return text
     }
 
     private var fot: String {

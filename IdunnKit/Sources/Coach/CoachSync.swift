@@ -183,8 +183,10 @@ public struct CoachCall: Equatable, Sendable {
 public enum CoachReply: Equatable, Sendable {
     /// Mottaget; antalet dokument som skrevs eller togs bort (0 för en koppling).
     case ok(count: Int)
+    /// BESLUT B143 · METOD M82. Ett dygns arkiv är mottaget: dygn i hinken, megabyte i den och taket.
+    case copied(days: Int, megabytes: Double, capMegabytes: Double)
     /// Mottagaren sa nej, med sitt skäl: `okand` (telefonen är inte kopplad eller har stängts av), `fel-kod`,
-    /// `sparrad`, `fel-form`, `fullt`.
+    /// `sparrad`, `fel-form`, `fullt`, och för utvecklingskopian `for-gammal` (hinken full, dygnet äldst).
     case refused(String)
     /// Ett svar utan `ok`: HTTP-koden.
     case http(Int)
@@ -195,12 +197,18 @@ public enum CoachReply: Equatable, Sendable {
         var ok: Bool
         var error: String?
         var count: Int?
+        var dygn: Int?
+        var mb: Double?
+        var tak: Double?
     }
 
     public static func parse(status: Int, body: Data) -> CoachReply {
         guard (200..<300).contains(status) else { return .http(status) }
         guard let w = try? JSONDecoder().decode(Wire.self, from: body) else { return .http(status) }
-        if w.ok { return .ok(count: w.count ?? 0) }
+        if w.ok {
+            if let d = w.dygn, let m = w.mb, let t = w.tak { return .copied(days: d, megabytes: m, capMegabytes: t) }
+            return .ok(count: w.count ?? 0)
+        }
         return .refused(w.error ?? "")
     }
 

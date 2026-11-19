@@ -35,7 +35,7 @@ public enum PassLoad {
         case .some(.styrka):
             let score = zoneScore(pass.activeSamples, maxPulse: maxPulse)
             return max(score, SleepNeedRules.strengthLoadPerMinute * pass.duration / 60)
-        case .some(.kondition), .some(.promenad), .some(.golf), .none:
+        case .some(.kondition), .some(.promenad), .none:
             return zoneScore(pass.activeSamples, maxPulse: maxPulse)
         }
     }

@@ -11,8 +11,6 @@ public enum PassKind: String, Codable, CaseIterable, Sendable {
     case styrka
     case kondition
     case promenad
-    /// BESLUT B142.
-    case golf
 
     /// Namnet som visas, med stor bokstav.
     public var displayName: String {
@@ -22,7 +20,6 @@ public enum PassKind: String, Codable, CaseIterable, Sendable {
         case .styrka: return "Styrka"
         case .kondition: return "Kondition"
         case .promenad: return "Promenad"
-        case .golf: return "Golf"
         }
     }
 }

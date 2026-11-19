@@ -89,7 +89,11 @@ final class CoachModell: ObservableObject {
         // METOD M73. En natt räknas om i flera steg; vänta tills det varit lugnt en stund och skicka en gång.
         Publishers.MergeMany(händelser)
             .debounce(for: .seconds(CoachRules.debounceSeconds), scheduler: RunLoop.main)
-            .sink { [weak self] (_: Void) -> Void in self?.synka(tvinga: false) }
+            .sink { [weak self] (_: Void) -> Void in
+                self?.synka(tvinga: false)
+                // BESLUT B143. Utvecklingskopian följer med när coachen skickar.
+                Task { @MainActor in DygnskopiaModell.shared.synka() }
+            }
             .store(in: &prenumerationer)
     }
 
@@ -98,7 +102,15 @@ final class CoachModell: ObservableObject {
     func vyernaMatade() {
         starta()
         matad = startad
+        // BESLUT B143. Utvecklingskopian startar när vyerna matat modellerna, som coachen.
+        Task { @MainActor in
+            DygnskopiaModell.shared.starta()
+            DygnskopiaModell.shared.synka()
+        }
     }
+
+    /// BESLUT B143. Vyerna har matat modellerna: utvecklingskopian får börja.
+    var redo: Bool { startad && matad }
 
     // MARK: Det som skickas
 
@@ -227,7 +239,7 @@ final class CoachModell: ObservableObject {
     /// Vad ett svar som inte gick fram betyder, i ord.
     private static func text(_ svar: CoachReply) -> String {
         switch svar {
-        case .ok:
+        case .ok, .copied:
             return ""
         case .refused(let skäl):
             switch skäl {
@@ -281,6 +293,7 @@ final class CoachModell: ObservableObject {
             self.läge.skickade = 0
             self.sätt(på: true)
             self.synka(tvinga: true)
+            DygnskopiaModell.shared.kopplingenÄndrad()
         }
     }
 
@@ -295,6 +308,7 @@ final class CoachModell: ObservableObject {
     func kopplaFrån() {
         glömKopplingen()
         läge.fel = nil
+        DygnskopiaModell.shared.kopplingenÄndrad()
     }
 
     private func glömKopplingen() {
