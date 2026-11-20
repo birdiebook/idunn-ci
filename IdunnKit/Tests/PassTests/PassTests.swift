@@ -356,7 +356,9 @@ final class PassNedräkningTests: XCTestCase {
 
 final class PassKindTests: XCTestCase {
     func testTypernaOchDeraNamn() {
-        XCTAssertEqual(PassKind.allCases.map(\.rawValue), ["bastu", "dusch", "styrka", "kondition", "promenad"])
-        XCTAssertEqual(PassKind.allCases.map(\.displayName), ["Bastu", "Dusch", "Styrka", "Kondition", "Promenad"])
+        XCTAssertEqual(PassKind.allCases.map(\.rawValue),
+                       ["bastu", "dusch", "styrka", "kondition", "promenad", "golf"])
+        XCTAssertEqual(PassKind.allCases.map(\.displayName),
+                       ["Bastu", "Dusch", "Styrka", "Kondition", "Promenad", "Golf"])
     }
 }

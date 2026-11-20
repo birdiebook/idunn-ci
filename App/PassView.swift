@@ -7,7 +7,7 @@ import SleepNeed
 
 /// BESLUT B58 · METOD M47
 /// Fliken Pass: en knapp startar ett pass med puls (bastu, dusch, styrka, kondition,
-/// promenad), vyn visar tid, stor puls och kurvan, och efter Stopp mäts pulsen vidare i 10
+/// promenad, golf), vyn visar tid, stor puls och kurvan, och efter Stopp mäts pulsen vidare i 10
 /// minuter så att återhämtningen syns. Lite text, stora siffror. `PassScreen` tar all sin
 /// data som värden (som `MorningCardScreen`), så att den går att rita i provet; `PassView`
 /// kopplar den till `PassController`.
@@ -108,6 +108,7 @@ enum PassFormat {
         case .styrka: return "dumbbell"
         case .kondition: return "figure.run"
         case .promenad: return "figure.walk"
+        case .golf: return "figure.golf"
         case nil: return "heart"
         }
     }
@@ -906,7 +907,7 @@ private struct PassRecovery: View {
     }
 }
 
-/// De fem typerna som knappar; den valda är fylld.
+/// Typerna som knappar; den valda är fylld.
 private struct KindPicker: View {
     let selected: PassKind?
     let onSelect: (PassKind) -> Void
