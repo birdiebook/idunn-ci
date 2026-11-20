@@ -1,0 +1,4 @@
+fd68793edcf8ec4169dd0c3d7cd4c8dbf1254f94 spegel 2026-11-20T21:28:26Z run 44820584622
+== testflight (arkiv, signering, uppladdning)
+RÖTT: bygget nådde inte TestFlight (se körningen 44820584622)
+FEL: hemligheten APP_STORE_CONNECT_ISSUER_ID saknas i spegelns Actions-hemligheter.
