@@ -14,12 +14,12 @@ import SleepNeed
 enum PassZonTrappa {
     static func color(_ zon: Int) -> Color {
         switch zon {
-        // BESLUT B137. Zonerna har färg (lånat ur stilen Lugn), och bara zonerna; vila är grå.
-        case 1: return Color(rgb: 0x5E7FC9)
-        case 2: return Color(rgb: 0x35C9B0)
-        case 3: return Color(rgb: 0xE9C645)
-        case 4: return Color(rgb: 0xF07F3C)
-        case 5: return Color(rgb: 0xE5407A)
+        // BESLUT B145 · BESLUT B137. Zonerna har färg, och bara zonerna: grå, blå, grön, orangegul, röd; vila är mörk.
+        case 1: return Color(rgb: 0x9AA4AB)
+        case 2: return Color(rgb: 0x4F9BEA)
+        case 3: return Color(rgb: 0x4CC38A)
+        case 4: return Color(rgb: 0xF5A524)
+        case 5: return Color(rgb: 0xE5484D)
         default: return Color(rgb: 0x1F262A)
         }
     }

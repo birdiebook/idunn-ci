@@ -249,14 +249,14 @@ struct PassKurva: View {
         if nu.count > 0 { if nuEfter { efter.append(nu) } else { före.append(nu) } }
 
         // BESLUT B144. Linjen före stopp i zonens färg där den går: en lodrät toning med skarpa skiften vid zonernas
-        // gränser, så att varje bit av linjen får färgen för sin höjd. Under zon 1, och utan zoner, är den blågrå.
+        // gränser, så att varje bit av linjen får färgen för sin höjd. Under zon 1 är den mörkgrå (B145), utan zoner blågrå.
         let zonfärg: GraphicsContext.Shading? = {
             guard !band.isEmpty else { return nil }
             let span: CGFloat = max(1, bas - top)
             func andel(_ v: Double) -> CGFloat { min(1, max(0, (y(v) - top) / span)) }
             // Varje nivå har sin färg mellan sin undre gräns och nästa nivås.
             var stopp: [Gradient.Stop] = []
-            var nivåer: [(från: Double, färg: Color)] = [(-Double.infinity, Tema.pulse)]
+            var nivåer: [(från: Double, färg: Color)] = [(-Double.infinity, Color(rgb: 0x5A646B))]
             nivåer += band.map { (b: Band) -> (från: Double, färg: Color) in (b.från, b.färg) }
             // Uppifrån och ner, så att platserna stiger och varje skifte blir skarpt.
             for i in nivåer.indices.reversed() {
