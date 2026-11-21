@@ -47,6 +47,8 @@ struct PassKurva: View {
     var omvänd: Bool = false
     /// Zonbanden bakom kurvan, i stigande ordning; tomt = inga band.
     var band: [Band] = []
+    /// Skalans tillåtna steg; nil = 1, 2 eller 5 gånger en tiopotens.
+    var stegval: [Double]? = nil
     /// Texten för ett värde på skalan.
     var text: (Double) -> String
     /// Talet och enheten i hörnet när en punkt är vald, t.ex. ("124", "bpm").
@@ -59,7 +61,7 @@ struct PassKurva: View {
     /// Uttrycklig, för `@State private var markerad` gör den automatiska initieraren privat (se `Pekyta`).
     init(punkter: [PassSeries.Point], längd: TimeInterval, start: Date? = nil, stopp: TimeInterval? = nil,
          lucka: TimeInterval? = nil, omvänd: Bool = false, band: [Band] = [],
-         text: @escaping (Double) -> String,
+         stegval: [Double]? = nil, text: @escaping (Double) -> String,
          vald: @escaping (Double) -> (tal: String, enhet: String) = { (v: Double) in (String(Int(v.rounded())), "") },
          etikett: String = "Kurva") {
         self.punkter = punkter
@@ -69,6 +71,7 @@ struct PassKurva: View {
         self.lucka = lucka
         self.omvänd = omvänd
         self.band = band
+        self.stegval = stegval
         self.text = text
         self.vald = vald
         self.etikett = etikett
@@ -87,12 +90,13 @@ struct PassKurva: View {
     private var xMax: TimeInterval { max(1, längd, punkter.last?.seconds ?? 0) }
 
     /// Skalan: jämna steg (1, 2 eller 5 gånger en tiopotens) så att det blir fyra till sju linjer.
-    static func skala(_ låg: Double, _ hög: Double) -> (lo: Double, hi: Double, steg: Double) {
+    /// Med `stegval` (t.ex. tempots 15, 30, 60 s) väljs det minsta av dem som räcker.
+    static func skala(_ låg: Double, _ hög: Double, stegval: [Double]? = nil) -> (lo: Double, hi: Double, steg: Double) {
         let spann: Double = max(hög - låg, 1)
         let rå: Double = spann / 5
         let tio: Double = pow(10, (log10(rå)).rounded(.down))
-        let steg: Double = [1, 2, 5, 10].map { (f: Double) -> Double in f * tio }
-            .first { (s: Double) -> Bool in s >= rå } ?? 10 * tio
+        let kandidater: [Double] = stegval ?? [1, 2, 5, 10].map { (f: Double) -> Double in f * tio }
+        let steg: Double = kandidater.first { (s: Double) -> Bool in s >= rå } ?? (kandidater.last ?? 10 * tio)
         var lo: Double = (låg / steg).rounded(.down) * steg
         var hi: Double = (hög / steg).rounded(.up) * steg
         if hi - lo < steg {
@@ -180,7 +184,7 @@ struct PassKurva: View {
         let x = { (s: TimeInterval) -> CGFloat in vä + CGFloat(min(1, max(0, s / xMax))) * bredd }
 
         let värden: [Double] = punkter.map { (q: PassSeries.Point) -> Double in q.value }
-        let sk: (lo: Double, hi: Double, steg: Double) = Self.skala(värden.min() ?? 0, värden.max() ?? 0)
+        let sk: (lo: Double, hi: Double, steg: Double) = Self.skala(värden.min() ?? 0, värden.max() ?? 0, stegval: stegval)
         let vänd: Bool = omvänd
         let y = { (v: Double) -> CGFloat in
             let f: Double = (min(max(v, sk.lo), sk.hi) - sk.lo) / (sk.hi - sk.lo)

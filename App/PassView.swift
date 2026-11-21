@@ -687,6 +687,7 @@ struct PassDetail: View {
             case .tempo:
                 PassKortRubrik(text: "Tempo")
                 PassKurva(punkter: tempo, längd: pass.duration, start: pass.start, stopp: stopp, omvänd: true,
+                          stegval: [15, 30, 60, 120, 300],
                           text: { (v: Double) -> String in KonditionText.tempo(v) },
                           vald: { (v: Double) in (KonditionText.tempo(v), "/km") }, etikett: "Tempokurva")
                 Text("per km, per minut av passet").font(.system(size: 12)).foregroundStyle(Tema.dim)
