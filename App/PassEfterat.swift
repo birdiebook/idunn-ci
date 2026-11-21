@@ -24,11 +24,11 @@ struct PassKortRubrik: View {
 /// BESLUT B144 · BESLUT B138 · METOD M79 · METOD M83
 /// En kurva över passets tid i Nattens form (B95–B99): en blågrå linje med en yta under som tonar ut, skalan på jämna
 /// tal med linjer ända ut och talen till höger, tiden före stopp i full ton och efter stopp uttonad, en streckad linje
-/// vid Start och vid Stopp med klockslaget under i textens färg. Pulsen kan ha zonerna som svaga band bakom kurvan.
+/// vid Start och vid Stopp med klockslaget under i textens färg. Pulslinjen före stopp kan färgas efter zonen den går i.
 /// Ett håll på kurvan sätter en punkt som följer fingret, med värdet och tiden i hörnet och ett knäpp när punkten kommer;
 /// den försvinner när fingret släpps. Färre än två punkter ger en text.
 struct PassKurva: View {
-    /// Ett zonband: zonens undre gräns i kurvans enhet och dess färg.
+    /// En zon: dess undre gräns i kurvans enhet och dess färg.
     struct Band: Equatable {
         var från: Double
         var färg: Color
@@ -45,7 +45,7 @@ struct PassKurva: View {
     var lucka: TimeInterval? = nil
     /// true = lägre värde ritas högre upp (tempo).
     var omvänd: Bool = false
-    /// Zonbanden bakom kurvan, i stigande ordning; tomt = inga band.
+    /// Zonerna som färgar linjen, i stigande ordning; tomt = blågrå linje.
     var band: [Band] = []
     /// Skalans tillåtna steg; nil = 1, 2 eller 5 gånger en tiopotens.
     var stegval: [Double]? = nil
@@ -191,18 +191,6 @@ struct PassKurva: View {
             return top + CGFloat(vänd ? f : 1 - f) * ch
         }
 
-        // BESLUT B144. Zonerna som svaga band bakom kurvan, inom skalan.
-        for (i, b) in band.enumerated() {
-            let övre: Double = i + 1 < band.count ? band[i + 1].från : sk.hi
-            let a: Double = max(b.från, sk.lo)
-            let ö: Double = min(övre, sk.hi)
-            guard ö > a else { continue }
-            let y1: CGFloat = y(ö)
-            let y2: CGFloat = y(a)
-            ctx.fill(Path(CGRect(x: 0, y: min(y1, y2), width: W, height: abs(y2 - y1))),
-                     with: .color(b.färg.opacity(0.07)))
-        }
-
         // BESLUT B95 · BESLUT B97. Skalan på jämna steg, linjerna ända ut och talen till höger ovanför linjen.
         var v: Double = sk.lo
         while v <= sk.hi + sk.steg / 1000 {
@@ -260,7 +248,29 @@ struct PassKurva: View {
         }
         if nu.count > 0 { if nuEfter { efter.append(nu) } else { före.append(nu) } }
 
-        func rita(_ stycken: [[CGPoint]], yta ytans: Double, linje linjens: Double) {
+        // BESLUT B144. Linjen före stopp i zonens färg där den går: en lodrät toning med skarpa skiften vid zonernas
+        // gränser, så att varje bit av linjen får färgen för sin höjd. Under zon 1, och utan zoner, är den blågrå.
+        let zonfärg: GraphicsContext.Shading? = {
+            guard !band.isEmpty else { return nil }
+            let span: CGFloat = max(1, bas - top)
+            func andel(_ v: Double) -> CGFloat { min(1, max(0, (y(v) - top) / span)) }
+            // Varje nivå har sin färg mellan sin undre gräns och nästa nivås.
+            var stopp: [Gradient.Stop] = []
+            var nivåer: [(från: Double, färg: Color)] = [(-Double.infinity, Tema.pulse)]
+            nivåer += band.map { (b: Band) -> (från: Double, färg: Color) in (b.från, b.färg) }
+            // Uppifrån och ner, så att platserna stiger och varje skifte blir skarpt.
+            for i in nivåer.indices.reversed() {
+                let n: (från: Double, färg: Color) = nivåer[i]
+                let övre: CGFloat = i + 1 < nivåer.count ? andel(nivåer[i + 1].från) : 0
+                let undre: CGFloat = n.från.isFinite ? andel(n.från) : 1
+                stopp.append(Gradient.Stop(color: n.färg, location: övre))
+                stopp.append(Gradient.Stop(color: n.färg, location: undre))
+            }
+            return .linearGradient(Gradient(stops: stopp), startPoint: CGPoint(x: 0, y: top),
+                                   endPoint: CGPoint(x: 0, y: bas))
+        }()
+
+        func rita(_ stycken: [[CGPoint]], yta ytans: Double, linje linjens: Double, färg: GraphicsContext.Shading? = nil) {
             let ton = GraphicsContext.Shading.linearGradient(
                 Gradient(colors: [Tema.pulse.opacity(ytans), Tema.pulse.opacity(0)]),
                 startPoint: CGPoint(x: 0, y: top), endPoint: CGPoint(x: 0, y: bas))
@@ -274,12 +284,12 @@ struct PassKurva: View {
                 var l = Path()
                 l.move(to: s[0])
                 for p in s.dropFirst() { l.addLine(to: p) }
-                ctx.stroke(l, with: .color(Tema.pulse.opacity(linjens)),
+                ctx.stroke(l, with: färg ?? .color(Tema.pulse.opacity(linjens)),
                            style: StrokeStyle(lineWidth: Self.linje, lineCap: .round, lineJoin: .round))
             }
         }
         rita(efter, yta: 0.10, linje: 0.4)
-        rita(före, yta: 0.30, linje: 1)
+        rita(före, yta: 0.30, linje: 1, färg: zonfärg)
 
         // BESLUT B98. Den valda punkten: ett streckat lodstreck och en punkt på kurvan.
         if let v = vald {

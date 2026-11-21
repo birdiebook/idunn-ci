@@ -698,7 +698,7 @@ struct PassDetail: View {
                           vald: { (v: Double) in (String(Int(v.rounded())), "m") }, etikett: "Höjdkurva")
                 Text("meter över havet").font(.system(size: 12)).foregroundStyle(Tema.dim)
             default:
-                // BESLUT B144 · METOD M83. Pulsen som medel över fönster, med zonerna som band bakom.
+                // BESLUT B144 · METOD M83. Pulsen som medel över fönster, och linjen i zonernas färg.
                 let fönster: TimeInterval = PassSeries.window(length: slutPuls)
                 PassKortRubrik(text: "Puls")
                 PassKurva(punkter: PassSeries.averaged(PassSeries.pulse(pass), window: fönster, split: stopp),
