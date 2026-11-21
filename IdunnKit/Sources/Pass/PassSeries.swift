@@ -1,6 +1,6 @@
 import Foundation
 
-/// BESLUT B138 · METOD M79
+/// BESLUT B138 · BESLUT B144 · METOD M79 · METOD M83
 /// Kurvorna i det sparade passet utöver pulsen: tempot och höjden över passets tid, ur spåret.
 public enum PassSeries {
     /// METOD M79. Tempot räknas per hel minut av passet.
@@ -53,6 +53,41 @@ public enum PassSeries {
         pass.samples.map { (s: PassSample) -> Point in
             Point(seconds: s.t.timeIntervalSince(pass.start), value: Double(s.bpm))
         }
+    }
+
+    /// METOD M83. Pulskurvan i det sparade passet ritas som medel över fönster, så att kurvan får ungefär lika många
+    /// punkter oavsett passets längd.
+    public static let targetPoints = 120.0
+    /// METOD M83. Kortaste fönstret, och fönstren är hela multiplar av det.
+    public static let minWindowSeconds: TimeInterval = 5
+
+    /// METOD M83. Fönstrets längd för en kurva över `length` sekunder: längden delad på 120, avrundad uppåt till hela
+    /// 5 s, minst 5 s (22 minuter ger 15 s, en timme 30 s).
+    public static func window(length: TimeInterval) -> TimeInterval {
+        guard length > 0 else { return minWindowSeconds }
+        let steg = (length / targetPoints / minWindowSeconds).rounded(.up)
+        return max(1, steg) * minWindowSeconds
+    }
+
+    /// METOD M83. Medel över fönster om `window` sekunder räknade från 0, och från `split` (stopp) på nytt, så att ett
+    /// fönster aldrig blandar tiden före och efter stopp. Varje fönster med punkter ger en punkt: medlet av tiderna och
+    /// medlet av värdena. Ett tomt fönster ger ingen punkt. Punkterna kommer i tidsordning.
+    public static func averaged(_ points: [Point], window: TimeInterval, split: TimeInterval? = nil) -> [Point] {
+        guard window > 0 else { return points }
+        struct Nyckel: Hashable { let del: Int; let fönster: Int }
+        var summa: [Nyckel: (t: Double, v: Double, n: Int)] = [:]
+        for p in points {
+            let efter = split.map { (s: TimeInterval) -> Bool in p.seconds > s } ?? false
+            let bas = efter ? (split ?? 0) : 0
+            let k = Nyckel(del: efter ? 1 : 0, fönster: Int(((p.seconds - bas) / window).rounded(.down)))
+            let f = summa[k] ?? (0, 0, 0)
+            summa[k] = (f.t + p.seconds, f.v + p.value, f.n + 1)
+        }
+        return summa.values
+            .map { (f: (t: Double, v: Double, n: Int)) -> Point in
+                Point(seconds: f.t / Double(f.n), value: f.v / Double(f.n))
+            }
+            .sorted { (a: Point, b: Point) -> Bool in a.seconds < b.seconds }
     }
 
     /// Punkten närmast tiden `seconds` (för markören); `nil` utan punkter.

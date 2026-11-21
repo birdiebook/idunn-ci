@@ -1,7 +1,7 @@
 import SwiftUI
 import Pass
 
-/// BESLUT B138
+/// BESLUT B138 · BESLUT B144
 /// Det sparade passet i skissens form (mörkt, grått): vilken kurva som visas, kurvan själv och delkorten under den.
 /// Vyerna tar sin data som värden, så att provet ritar dem. Färg bara ur `Tema`, och zonernas färg bara för zoner.
 
@@ -21,166 +21,273 @@ struct PassKortRubrik: View {
 
 // MARK: - Kurvan
 
-/// BESLUT B138 · METOD M79
-/// En kurva över passets tid utan Charts: tre rutnätslinjer med värden, linjen fram till stopp i `Tema.text` och delen efter
-/// stopp dämpad, en streckad linje och en prick vid stopp och på tiden under ytan. y-axeln går från lägsta till högsta
-/// värdet med 10 % luft uppe och nere; alla värden lika ger en linje mitt i. Färre än två punkter ger en text.
+/// BESLUT B144 · BESLUT B138 · METOD M79 · METOD M83
+/// En kurva över passets tid i Nattens form (B95–B99): en blågrå linje med en yta under som tonar ut, skalan på jämna
+/// tal med linjer ända ut och talen till höger, tiden före stopp i full ton och efter stopp uttonad, en streckad linje
+/// vid Start och vid Stopp med klockslaget under i textens färg. Pulsen kan ha zonerna som svaga band bakom kurvan.
+/// Ett håll på kurvan sätter en punkt som följer fingret, med värdet och tiden i hörnet och ett knäpp när punkten kommer;
+/// den försvinner när fingret släpps. Färre än två punkter ger en text.
 struct PassKurva: View {
+    /// Ett zonband: zonens undre gräns i kurvans enhet och dess färg.
+    struct Band: Equatable {
+        var från: Double
+        var färg: Color
+    }
+
     let punkter: [PassSeries.Point]
     /// Passets längd i sekunder (x-axelns högra kant är max av den och sista punkten).
     let längd: TimeInterval
-    /// Sekunder från Start till Stopp; delen efter ritas dämpad. nil = inget stopp på kurvan.
+    /// Passets start: klockslagen under kurvan. nil = minuter sedan Start.
+    var start: Date? = nil
+    /// Sekunder från Start till Stopp; delen efter ritas uttonad. nil = inget stopp på kurvan.
     var stopp: TimeInterval? = nil
     /// Större lucka än så här (sekunder) mellan två punkter bryter linjen; nil = bryts aldrig.
     var lucka: TimeInterval? = nil
     /// true = lägre värde ritas högre upp (tempo).
     var omvänd: Bool = false
-    /// Texten för ett värde på y-axeln och i markören.
+    /// Zonbanden bakom kurvan, i stigande ordning; tomt = inga band.
+    var band: [Band] = []
+    /// Texten för ett värde på skalan.
     var text: (Double) -> String
-    /// Markörens text vid stopp, t.ex. "168 · stopp"; nil = ingen markör.
-    var markör: String? = nil
+    /// Talet och enheten i hörnet när en punkt är vald, t.ex. ("124", "bpm").
+    var vald: (Double) -> (tal: String, enhet: String) = { (v: Double) in (String(Int(v.rounded())), "") }
     /// Vad skärmläsaren säger om kurvan.
     var etikett: String = "Kurva"
 
-    /// Utrymmet till höger om kurvan för värdena.
-    private static let marginal: CGFloat = 34
-    private static let ytaHöjd: CGFloat = 200
-    /// Fler punkter än så här ritas inte.
-    private static let flest: Int = 600
+    @State private var markerad: Date? = nil
 
-    /// Glesar ut till högst `flest` punkter (var n:te, den sista alltid med) och säger hur glest.
-    private static func glesa(_ p: [PassSeries.Point]) -> (punkter: [PassSeries.Point], steg: Int) {
-        guard p.count > flest else { return (p, 1) }
-        let steg: Int = (p.count + flest - 1) / flest
-        var ut: [PassSeries.Point] = []
-        for (i, q) in p.enumerated() where i % steg == 0 || i == p.count - 1 {
-            ut.append(q)
+    /// Uttrycklig, för `@State private var markerad` gör den automatiska initieraren privat (se `Pekyta`).
+    init(punkter: [PassSeries.Point], längd: TimeInterval, start: Date? = nil, stopp: TimeInterval? = nil,
+         lucka: TimeInterval? = nil, omvänd: Bool = false, band: [Band] = [],
+         text: @escaping (Double) -> String,
+         vald: @escaping (Double) -> (tal: String, enhet: String) = { (v: Double) in (String(Int(v.rounded())), "") },
+         etikett: String = "Kurva") {
+        self.punkter = punkter
+        self.längd = längd
+        self.start = start
+        self.stopp = stopp
+        self.lucka = lucka
+        self.omvänd = omvänd
+        self.band = band
+        self.text = text
+        self.vald = vald
+        self.etikett = etikett
+    }
+
+    /// Kurvans kanter i ytan, som Nattens (B99): början och slutet syns, och skalans tal står utanför till höger.
+    static let kant: (vänster: CGFloat, höger: CGFloat) = (20, 30)
+    private static let ytaHöjd: CGFloat = 230
+    /// Ritytan ovanför klockslagen.
+    private static let topp: CGFloat = 12
+    private static let botten: CGFloat = 34
+    private static let linje: CGFloat = 1.6
+
+    /// Tidsaxelns nollpunkt i sekunder sedan 1970 (passets start, eller 0 utan start).
+    private var t0: TimeInterval { start?.timeIntervalSince1970 ?? 0 }
+    private var xMax: TimeInterval { max(1, längd, punkter.last?.seconds ?? 0) }
+
+    /// Skalan: jämna steg (1, 2 eller 5 gånger en tiopotens) så att det blir fyra till sju linjer.
+    static func skala(_ låg: Double, _ hög: Double) -> (lo: Double, hi: Double, steg: Double) {
+        let spann: Double = max(hög - låg, 1)
+        let rå: Double = spann / 5
+        let tio: Double = pow(10, (log10(rå)).rounded(.down))
+        let steg: Double = [1, 2, 5, 10].map { (f: Double) -> Double in f * tio }
+            .first { (s: Double) -> Bool in s >= rå } ?? 10 * tio
+        var lo: Double = (låg / steg).rounded(.down) * steg
+        var hi: Double = (hög / steg).rounded(.up) * steg
+        if hi - lo < steg {
+            lo -= steg / 2
+            hi += steg / 2
         }
-        return (ut, steg)
+        return (lo, hi, steg)
+    }
+
+    /// Den valda punkten: närmast fingret, inom en lucka.
+    private var valdPunkt: PassSeries.Point? {
+        guard let m = markerad else { return nil }
+        let s: TimeInterval = m.timeIntervalSince1970 - t0
+        guard let n = PassSeries.nearest(punkter, to: s) else { return nil }
+        return abs(n.seconds - s) <= (lucka ?? .infinity) ? n : nil
     }
 
     var body: some View {
-        let glest: (punkter: [PassSeries.Point], steg: Int) = Self.glesa(punkter)
-        if glest.punkter.count < 2 {
+        if punkter.count < 2 {
             Text("Ingen kurva för det här passet.")
                 .font(.system(size: 13))
                 .foregroundStyle(Tema.dim)
                 .frame(maxWidth: .infinity, minHeight: Self.ytaHöjd, alignment: .center)
         } else {
-            VStack(spacing: 6) {
-                GeometryReader { (g: GeometryProxy) in
-                    ritning(glest.punkter, steg: glest.steg, yta: g.size)
-                }
-                .frame(height: Self.ytaHöjd)
-                HStack {
-                    Text("0")
-                    Spacer(minLength: 8)
-                    Text(PassFormat.short(längd))
-                }
-                .font(.system(size: 11))
-                .foregroundStyle(Tema.dim)
-                .padding(.trailing, Self.marginal)
+            let v: PassSeries.Point? = valdPunkt
+            Canvas { (ctx: inout GraphicsContext, size: CGSize) in
+                teckna(ctx, size, vald: v)
             }
+            .frame(height: Self.ytaHöjd)
+            .overlay(alignment: hörn(v)) {
+                if let v = v { hörnetikett(v) }
+            }
+            .pekMarkering($markerad, från: t0, till: t0 + xMax,
+                          vänster: Self.kant.vänster, höger: Self.kant.höger)
+            // BESLUT B99. Ett knäpp när punkten kommer, inget medan fingret drar.
+            .sensoryFeedback(.impact(weight: .light), trigger: markerad != nil) { (före: Bool, nu: Bool) -> Bool in
+                nu && !före
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(etikett)
         }
     }
 
-    private func ritning(_ p: [PassSeries.Point], steg: Int, yta: CGSize) -> some View {
+    /// BESLUT B98. Talet uppe till vänster, och till höger när punkten ligger i kurvans vänstra del.
+    private func hörn(_ v: PassSeries.Point?) -> Alignment {
+        guard let v = v else { return .topLeading }
+        return v.seconds / xMax < 0.4 ? .topTrailing : .topLeading
+    }
+
+    private func tidstext(_ sekunder: TimeInterval) -> String {
+        if start != nil { return Fmt.clock(time: t0 + sekunder) }
+        return PassFormat.short(sekunder)
+    }
+
+    private func hörnetikett(_ v: PassSeries.Point) -> some View {
+        let t: (tal: String, enhet: String) = vald(v.value)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(t.tal)
+                    .font(.system(size: 26, weight: .semibold))
+                    .monospacedDigit()
+                if !t.enhet.isEmpty {
+                    Text(t.enhet).font(.system(size: 13, weight: .medium))
+                }
+            }
+            .foregroundStyle(Tema.pulsLjus)
+            Text(tidstext(v.seconds))
+                .font(.system(size: 11, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(Tema.dim)
+        }
+        .padding(.horizontal, 4)
+        .allowsHitTesting(false)
+    }
+
+    private func teckna(_ ctx: GraphicsContext, _ size: CGSize, vald: PassSeries.Point?) {
+        let W: CGFloat = size.width
+        let H: CGFloat = size.height
+        let top: CGFloat = Self.topp
+        let ch: CGFloat = H - Self.topp - Self.botten
+        let bas: CGFloat = top + ch
+        let vä: CGFloat = Self.kant.vänster
+        let bredd: CGFloat = max(1, W - vä - Self.kant.höger)
+        let xMax: TimeInterval = self.xMax
+        let x = { (s: TimeInterval) -> CGFloat in vä + CGFloat(min(1, max(0, s / xMax))) * bredd }
+
         let värden: [Double] = punkter.map { (q: PassSeries.Point) -> Double in q.value }
-        let låg: Double = värden.min() ?? 0
-        let hög: Double = värden.max() ?? 0
-        let bredd: CGFloat = max(1, yta.width - Self.marginal)
-        let höjd: CGFloat = yta.height
-        let xMax: Double = max(1, längd, punkter.last?.seconds ?? 0)
+        let sk: (lo: Double, hi: Double, steg: Double) = Self.skala(värden.min() ?? 0, värden.max() ?? 0)
         let vänd: Bool = omvänd
-        let xAv: (Double) -> CGFloat = { (s: Double) -> CGFloat in
-            CGFloat(min(1, max(0, s / xMax))) * bredd
-        }
-        let yAv: (Double) -> CGFloat = { (v: Double) -> CGFloat in
-            let f: Double = hög > låg ? (v - låg) / (hög - låg) : 0.5
-            let fy: Double = vänd ? f : 1 - f
-            return höjd * CGFloat(0.1 + 0.8 * fy)
+        let y = { (v: Double) -> CGFloat in
+            let f: Double = (min(max(v, sk.lo), sk.hi) - sk.lo) / (sk.hi - sk.lo)
+            return top + CGFloat(vänd ? f : 1 - f) * ch
         }
 
-        var före: Path = Path()
-        var efter: Path = Path()
-        var sistFöre: Int = -2
-        var sistEfter: Int = -2
-        let gräns: Double? = lucka.map { (l: TimeInterval) -> Double in l * Double(max(1, steg)) }
-        for i in 1..<p.count {
-            let a: PassSeries.Point = p[i - 1]
-            let b: PassSeries.Point = p[i]
-            if let g = gräns, b.seconds - a.seconds > g { continue }
-            let pa: CGPoint = CGPoint(x: xAv(a.seconds), y: yAv(a.value))
-            let pb: CGPoint = CGPoint(x: xAv(b.seconds), y: yAv(b.value))
-            let dämpad: Bool = stopp.map { (s: TimeInterval) -> Bool in b.seconds > s } ?? false
-            if dämpad {
-                if sistEfter != i - 1 { efter.move(to: pa) }
-                efter.addLine(to: pb)
-                sistEfter = i
+        // BESLUT B144. Zonerna som svaga band bakom kurvan, inom skalan.
+        for (i, b) in band.enumerated() {
+            let övre: Double = i + 1 < band.count ? band[i + 1].från : sk.hi
+            let a: Double = max(b.från, sk.lo)
+            let ö: Double = min(övre, sk.hi)
+            guard ö > a else { continue }
+            let y1: CGFloat = y(ö)
+            let y2: CGFloat = y(a)
+            ctx.fill(Path(CGRect(x: 0, y: min(y1, y2), width: W, height: abs(y2 - y1))),
+                     with: .color(b.färg.opacity(0.07)))
+        }
+
+        // BESLUT B95 · BESLUT B97. Skalan på jämna steg, linjerna ända ut och talen till höger ovanför linjen.
+        var v: Double = sk.lo
+        while v <= sk.hi + sk.steg / 1000 {
+            let yy: CGFloat = y(v)
+            var p = Path()
+            p.move(to: CGPoint(x: 0, y: yy))
+            p.addLine(to: CGPoint(x: W, y: yy))
+            ctx.stroke(p, with: .color(Color.white.opacity(0.08)), lineWidth: 1)
+            if yy - 7 > top - 8 {
+                ctx.etikett(text(v), CGPoint(x: W - 4, y: yy - 7), storlek: 10, färg: Tema.dim, ankare: .trailing)
+            }
+            v += sk.steg
+        }
+
+        // BESLUT B99. Start och Stopp: en streckad linje från överkanten ner till en prick strax över klockslaget.
+        let prick: CGFloat = H - 20
+        var ändar: [TimeInterval] = [0]
+        if let s = stopp, s > 0, s < xMax { ändar.append(s) }
+        for t in ändar {
+            let px: CGFloat = x(t)
+            var p = Path()
+            p.move(to: CGPoint(x: px, y: 2))
+            p.addLine(to: CGPoint(x: px, y: prick))
+            ctx.stroke(p, with: .color(Color.white.opacity(0.45)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            ctx.fill(Path(ellipseIn: CGRect(x: px - 2.5, y: prick - 2.5, width: 5, height: 5)), with: .color(Tema.text))
+            ctx.etikett(tidstext(t), CGPoint(x: px, y: H - 8), storlek: 12, färg: Tema.text, vikt: .semibold)
+        }
+        // Slutet av kurvan, dämpat, när det inte krockar med Stopp.
+        let slutX: CGFloat = x(xMax)
+        if ändar.allSatisfy({ (t: TimeInterval) -> Bool in abs(x(t) - slutX) >= 48 }) {
+            ctx.etikett(tidstext(xMax), CGPoint(x: slutX, y: H - 8), storlek: 10, färg: Tema.dim)
+        }
+
+        // Linjen i stycken: en lucka bryter den, och stopp delar den i före och efter.
+        var före: [[CGPoint]] = []
+        var efter: [[CGPoint]] = []
+        var nu: [CGPoint] = []
+        var nuEfter: Bool = false
+        var förra: PassSeries.Point? = nil
+        for q in punkter {
+            let ärEfter: Bool = stopp.map { (s: TimeInterval) -> Bool in q.seconds > s } ?? false
+            let pt: CGPoint = CGPoint(x: x(q.seconds), y: y(q.value))
+            let bryt: Bool = förra.map { (f: PassSeries.Point) -> Bool in
+                lucka.map { (l: TimeInterval) -> Bool in q.seconds - f.seconds > l } ?? false
+            } ?? true
+            if bryt || ärEfter != nuEfter {
+                if nu.count > 0 { if nuEfter { efter.append(nu) } else { före.append(nu) } }
+                // Före och efter stopp hänger ihop i en punkt, utan lucka.
+                nu = (!bryt && ärEfter != nuEfter) ? [nu.last ?? pt, pt] : [pt]
+                nuEfter = ärEfter
             } else {
-                if sistFöre != i - 1 { före.move(to: pa) }
-                före.addLine(to: pb)
-                sistFöre = i
+                nu.append(pt)
             }
+            förra = q
         }
+        if nu.count > 0 { if nuEfter { efter.append(nu) } else { före.append(nu) } }
 
-        let nivåer: [Double] = hög > låg ? [hög, (hög + låg) / 2, låg] : [hög]
-        let stoppX: CGFloat? = stopp.flatMap { (s: TimeInterval) -> CGFloat? in
-            (s > 0 && s < xMax) ? xAv(s) : nil
+        func rita(_ stycken: [[CGPoint]], yta ytans: Double, linje linjens: Double) {
+            let ton = GraphicsContext.Shading.linearGradient(
+                Gradient(colors: [Tema.pulse.opacity(ytans), Tema.pulse.opacity(0)]),
+                startPoint: CGPoint(x: 0, y: top), endPoint: CGPoint(x: 0, y: bas))
+            for s in stycken where s.count > 1 {
+                var yta = Path()
+                yta.move(to: CGPoint(x: s[0].x, y: bas))
+                for p in s { yta.addLine(to: p) }
+                yta.addLine(to: CGPoint(x: s[s.count - 1].x, y: bas))
+                yta.closeSubpath()
+                ctx.fill(yta, with: ton)
+                var l = Path()
+                l.move(to: s[0])
+                for p in s.dropFirst() { l.addLine(to: p) }
+                ctx.stroke(l, with: .color(Tema.pulse.opacity(linjens)),
+                           style: StrokeStyle(lineWidth: Self.linje, lineCap: .round, lineJoin: .round))
+            }
         }
-        let närmast: PassSeries.Point? = stopp.flatMap { (s: TimeInterval) -> PassSeries.Point? in
-            PassSeries.nearest(punkter, to: s)
-        }
-        let marginal: CGFloat = Self.marginal
+        rita(efter, yta: 0.10, linje: 0.4)
+        rita(före, yta: 0.30, linje: 1)
 
-        return ZStack(alignment: .topLeading) {
-            ForEach(Array(nivåer.enumerated()), id: \.offset) { (e: (offset: Int, element: Double)) in
-                let y: CGFloat = yAv(e.element)
-                Path { (v: inout Path) -> Void in
-                    v.move(to: CGPoint(x: 0, y: y))
-                    v.addLine(to: CGPoint(x: bredd, y: y))
-                }
-                .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                Text(text(e.element))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Tema.dim)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .frame(width: marginal, alignment: .trailing)
-                    .position(x: bredd + marginal / 2, y: y - 8)
-            }
-            efter.stroke(Tema.dim.opacity(0.6), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-            före.stroke(Tema.text, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-            if let sx = stoppX {
-                Path { (v: inout Path) -> Void in
-                    v.move(to: CGPoint(x: sx, y: 0))
-                    v.addLine(to: CGPoint(x: sx, y: höjd))
-                }
-                .stroke(Tema.dim, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                if let n = närmast {
-                    let py: CGFloat = yAv(n.value)
-                    Circle()
-                        .fill(Tema.text)
-                        .frame(width: 8, height: 8)
-                        .position(x: sx, y: py)
-                    if let m = markör {
-                        let halv: CGFloat = CGFloat(m.count) * 3.6 + 10
-                        let px: CGFloat = min(max(sx, halv), max(halv, bredd + marginal - halv))
-                        Text(m)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Tema.text)
-                            .lineLimit(1)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(Tema.card2))
-                            .position(x: px, y: max(10, py - 20))
-                    }
-                }
-            }
+        // BESLUT B98. Den valda punkten: ett streckat lodstreck och en punkt på kurvan.
+        if let v = vald {
+            let px: CGFloat = x(v.seconds)
+            let py: CGFloat = y(v.value)
+            var p = Path()
+            p.move(to: CGPoint(x: px, y: top))
+            p.addLine(to: CGPoint(x: px, y: bas))
+            ctx.stroke(p, with: .color(Color.white.opacity(0.35)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            ctx.fill(Path(ellipseIn: CGRect(x: px - 5, y: py - 5, width: 10, height: 10)), with: .color(Tema.bg))
+            ctx.fill(Path(ellipseIn: CGRect(x: px - 3.5, y: py - 3.5, width: 7, height: 7)), with: .color(Tema.pulsLjus))
         }
-        .frame(width: yta.width, height: yta.height, alignment: .topLeading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(etikett)
     }
 }
 

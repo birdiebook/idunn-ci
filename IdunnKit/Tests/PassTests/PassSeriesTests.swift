@@ -61,4 +61,36 @@ final class PassSeriesTests: XCTestCase {
         XCTAssertEqual(PassSeries.nearest(p, to: 5000)?.value, 110)
         XCTAssertNil(PassSeries.nearest([], to: 10))
     }
+
+    // BESLUT B144 · METOD M83. Pulskurvan som medel över fönster.
+
+    func testFönstretFöljerLängden() {
+        XCTAssertEqual(PassSeries.window(length: 0), 5)
+        XCTAssertEqual(PassSeries.window(length: 300), 5)
+        XCTAssertEqual(PassSeries.window(length: 22 * 60), 15)
+        XCTAssertEqual(PassSeries.window(length: 3600), 30)
+    }
+
+    func testMedelPerFönster() {
+        let p = (0..<20).map { PassSeries.Point(seconds: Double($0), value: $0 < 10 ? 100 : 120) }
+        let m = PassSeries.averaged(p, window: 10)
+        XCTAssertEqual(m.count, 2)
+        XCTAssertEqual(m[0].seconds, 4.5, accuracy: 1e-9)
+        XCTAssertEqual(m[0].value, 100, accuracy: 1e-9)
+        XCTAssertEqual(m[1].value, 120, accuracy: 1e-9)
+    }
+
+    func testFönsterBlandarAldrigFöreOchEfterStopp() {
+        // Stopp vid 15 s: fönstret 10–20 delas, och tiden efter räknas från stopp.
+        let p = (0..<30).map { PassSeries.Point(seconds: Double($0), value: $0 <= 15 ? 150 : 90) }
+        let m = PassSeries.averaged(p, window: 10, split: 15)
+        XCTAssertTrue(m.allSatisfy { $0.value == 150 || $0.value == 90 })
+        XCTAssertEqual(m.filter { $0.seconds <= 15 }.count, 2)
+        XCTAssertEqual(m.filter { $0.seconds > 15 }.count, 2)
+    }
+
+    func testTommaFönsterGerIngenPunkt() {
+        let p = [PassSeries.Point(seconds: 1, value: 100), PassSeries.Point(seconds: 61, value: 110)]
+        XCTAssertEqual(PassSeries.averaged(p, window: 10).map { $0.seconds }, [1, 61])
+    }
 }

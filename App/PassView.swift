@@ -653,6 +653,14 @@ struct PassDetail: View {
         return PassZones.time(pass.activeSamples) { (bpm: Int) -> Int in PassLoad.zone(bpm: bpm, maxPulse: m) }
     }
 
+    /// BESLUT B144 · METOD M53. Zonernas undre gränser i slag per minut med zonens färg; tomt utan maxpuls.
+    private var zonband: [PassKurva.Band] {
+        guard let m = zonMaxpuls else { return [] }
+        return SleepNeedRules.zoneLowerBounds.enumerated().map { (e: (offset: Int, element: Double)) -> PassKurva.Band in
+            PassKurva.Band(från: e.element * m, färg: PassZonTrappa.color(e.offset + 1))
+        }
+    }
+
     /// BESLUT B138. Kurvan som visas: den valda när den finns för passet, annars Puls.
     private func aktiv(tempo: [PassSeries.Point], höjd: [PassSeries.Point]) -> PassKurvVal {
         switch kurva {
@@ -678,19 +686,25 @@ struct PassDetail: View {
             switch vald {
             case .tempo:
                 PassKortRubrik(text: "Tempo")
-                PassKurva(punkter: tempo, längd: pass.duration, stopp: stopp, omvänd: true,
-                          text: { (v: Double) -> String in KonditionText.tempo(v) }, etikett: "Tempokurva")
+                PassKurva(punkter: tempo, längd: pass.duration, start: pass.start, stopp: stopp, omvänd: true,
+                          text: { (v: Double) -> String in KonditionText.tempo(v) },
+                          vald: { (v: Double) in (KonditionText.tempo(v), "/km") }, etikett: "Tempokurva")
                 Text("per km, per minut av passet").font(.system(size: 12)).foregroundStyle(Tema.dim)
             case .höjd:
                 PassKortRubrik(text: "Höjd")
-                PassKurva(punkter: höjd, längd: pass.duration,
-                          text: { (v: Double) -> String in "\(Int(v.rounded())) m" }, etikett: "Höjdkurva")
+                PassKurva(punkter: höjd, längd: pass.duration, start: pass.start,
+                          text: { (v: Double) -> String in "\(Int(v.rounded())) m" },
+                          vald: { (v: Double) in (String(Int(v.rounded())), "m") }, etikett: "Höjdkurva")
                 Text("meter över havet").font(.system(size: 12)).foregroundStyle(Tema.dim)
             default:
+                // BESLUT B144 · METOD M83. Pulsen som medel över fönster, med zonerna som band bakom.
+                let fönster: TimeInterval = PassSeries.window(length: slutPuls)
                 PassKortRubrik(text: "Puls")
-                PassKurva(punkter: PassSeries.pulse(pass), längd: slutPuls, stopp: stopp, lucka: 10,
+                PassKurva(punkter: PassSeries.averaged(PassSeries.pulse(pass), window: fönster, split: stopp),
+                          längd: slutPuls, start: pass.start, stopp: stopp, lucka: 2 * fönster + 10,
+                          band: zonband,
                           text: { (v: Double) -> String in String(Int(v.rounded())) },
-                          markör: pass.pulseAtStop.map { (b: Int) -> String in "\(b) · stopp" },
+                          vald: { (v: Double) in (String(Int(v.rounded())), "bpm") },
                           etikett: "Pulskurva")
                 Text("lägst " + PassFormat.bpm(pass.minBpm)).font(.system(size: 12)).foregroundStyle(Tema.dim)
             }
