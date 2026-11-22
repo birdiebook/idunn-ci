@@ -14,12 +14,13 @@ import SleepNeed
 enum PassZonTrappa {
     static func color(_ zon: Int) -> Color {
         switch zon {
-        // BESLUT B145 · BESLUT B137. Zonerna har färg, och bara zonerna: grå, blå, grön, orangegul, röd; vila är mörk.
-        case 1: return Color(rgb: 0x9AA4AB)
-        case 2: return Color(rgb: 0x4F9BEA)
-        case 3: return Color(rgb: 0x4CC38A)
-        case 4: return Color(rgb: 0xF5A524)
-        case 5: return Color(rgb: 0xE5484D)
+        // BESLUT B145 · BESLUT B137 · BESLUT B146. Zonerna har färg, och bara zonerna: grå, blå, grön, orangegul, röd,
+        // dova (lägre mättnad) så att de passar det mörka; vila är mörk.
+        case 1: return Color(rgb: 0x7F888E)
+        case 2: return Color(rgb: 0x5281B4)
+        case 3: return Color(rgb: 0x4E9C7A)
+        case 4: return Color(rgb: 0xC39148)
+        case 5: return Color(rgb: 0xB55A5E)
         default: return Color(rgb: 0x1F262A)
         }
     }
@@ -29,6 +30,8 @@ enum PassZonTrappa {
 struct ZonRemsa: View {
     let zoner: [PassZones.Share]
     var höjd: CGFloat = 6
+    /// BESLUT B146. Den valda zonen; de andra tonas ner. nil = alla i full ton.
+    var vald: Int? = nil
 
     private var delar: [PassZones.Share] {
         zoner.filter { (z: PassZones.Share) -> Bool in z.zone >= 1 && z.seconds > 0 }
@@ -45,6 +48,7 @@ struct ZonRemsa: View {
                     ForEach(delar, id: \.zone) { (z: PassZones.Share) in
                         Capsule()
                             .fill(PassZonTrappa.color(z.zone))
+                            .opacity(vald == nil || vald == z.zone ? 1 : 0.3)
                             .frame(width: max(3, rum * CGFloat(z.seconds / summa)))
                     }
                 }

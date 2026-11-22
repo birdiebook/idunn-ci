@@ -600,16 +600,22 @@ struct PassDetail: View {
     @State private var problem: String?
     /// BESLUT B138. Vilken kurva som visas.
     @State private var kurva: PassKurvVal
+    /// BESLUT B146. Zonen som kurvan färgar; nil = kurvan blågrå.
+    @State private var valdZon: Int?
+    /// BESLUT B146. Pulsen före Start ur dygnens filer, läst när vyn visas; tom tills den lästs eller om den saknas.
+    @State private var förePuls: [PassSeries.Point]
 
     init(pass: Pass, actions: PassActions = PassActions(), maxPulse: Double? = nil,
          konditionMaxpuls: Double? = nil, zonMaxpuls: Double? = nil, kurva: PassKurvVal = .puls,
-         close: @escaping () -> Void = {}) {
+         valdZon: Int? = nil, förePuls: [PassSeries.Point] = [], close: @escaping () -> Void = {}) {
         self.pass = pass
         self.actions = actions
         self.maxPulse = maxPulse
         self.konditionMaxpuls = konditionMaxpuls
         self.zonMaxpuls = zonMaxpuls
         _kurva = State(initialValue: kurva)
+        _valdZon = State(initialValue: valdZon)
+        _förePuls = State(initialValue: förePuls)
         self.close = close
     }
 
@@ -653,12 +659,21 @@ struct PassDetail: View {
         return PassZones.time(pass.activeSamples) { (bpm: Int) -> Int in PassLoad.zone(bpm: bpm, maxPulse: m) }
     }
 
-    /// BESLUT B144 · METOD M53. Zonernas undre gränser i slag per minut med zonens färg; tomt utan maxpuls.
+    /// BESLUT B144 · BESLUT B146 · METOD M53. Zonernas undre gränser i slag per minut; bara den valda zonen har sin
+    /// färg, de andra kurvans blågrå. Tomt utan maxpuls eller utan vald zon: då är hela linjen blågrå.
     private var zonband: [PassKurva.Band] {
-        guard let m = zonMaxpuls else { return [] }
+        guard let m = zonMaxpuls, let vald = valdZon else { return [] }
         return SleepNeedRules.zoneLowerBounds.enumerated().map { (e: (offset: Int, element: Double)) -> PassKurva.Band in
-            PassKurva.Band(från: e.element * m, färg: PassZonTrappa.color(e.offset + 1))
+            let zon: Int = e.offset + 1
+            return PassKurva.Band(från: e.element * m, färg: zon == vald ? PassZonTrappa.color(zon) : Tema.pulse)
         }
+    }
+
+    /// BESLUT B146. Så lång tid före Start som kurvan visar: lika lång som mätningen efter stopp, så att passet står i
+    /// mitten. 0 för ett pass utan stopp.
+    private var föreSekunder: TimeInterval {
+        guard let stop = pass.stop else { return 0 }
+        return max(0, (pass.afterEnd ?? stop).timeIntervalSince(stop))
     }
 
     /// BESLUT B138. Kurvan som visas: den valda när den finns för passet, annars Puls.
@@ -701,8 +716,9 @@ struct PassDetail: View {
                 // BESLUT B144 · METOD M83. Pulsen som medel över fönster, och linjen i zonernas färg.
                 let fönster: TimeInterval = PassSeries.window(length: slutPuls)
                 PassKortRubrik(text: "Puls")
-                PassKurva(punkter: PassSeries.averaged(PassSeries.pulse(pass), window: fönster, split: stopp),
-                          längd: slutPuls, start: pass.start, stopp: stopp, lucka: 2 * fönster + 10,
+                PassKurva(punkter: PassSeries.averaged(förePuls + PassSeries.pulse(pass), window: fönster, split: stopp),
+                          längd: slutPuls, start: pass.start, stopp: stopp, före: föreSekunder,
+                          lucka: 2 * fönster + 10,
                           band: zonband,
                           text: { (v: Double) -> String in String(Int(v.rounded())) },
                           vald: { (v: Double) in (String(Int(v.rounded())), "bpm") },
@@ -755,13 +771,27 @@ struct PassDetail: View {
                         .foregroundStyle(Tema.dim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                PassZonKort(zoner: zoner)
-                if pass.stop != nil { PassEfterStoppKort(pass: pass) }
+                PassZonKort(zoner: zoner, vald: valdZon) { (z: Int) in
+                    withAnimation(.easeInOut(duration: 0.2)) { valdZon = valdZon == z ? nil : z }
+                }
+                // BESLUT B147. Kortet Efter stopp är borttaget tills vidare.
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
         .background(Tema.bg)
+        // BESLUT B146. Pulsen före Start ur dygnens filer, på en bakgrundskö (en dygnsfil kan vara tiotals MB).
+        .task(id: pass.id) {
+            let sek: TimeInterval = föreSekunder
+            guard sek > 0, förePuls.isEmpty else { return }
+            let p: Pass = pass
+            let poster: [PassHistory.Reading] = await Task.detached(priority: .utility) {
+                PassHistorik.före(p, sekunder: sek)
+            }.value
+            förePuls = poster.map { (r: PassHistory.Reading) -> PassSeries.Point in
+                PassSeries.Point(seconds: TimeInterval(r.time) - p.start.timeIntervalSince1970, value: Double(r.bpm))
+            }
+        }
         // BESLUT B133. Ingen accentfärg: knapparna i fältet är vita.
         .tint(Tema.text)
         .navigationBarTitleDisplayMode(.inline)
