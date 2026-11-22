@@ -84,8 +84,8 @@ struct PassKurva: View {
     }
 
     /// Kurvans kanter i ytan, som Nattens (B99): början och slutet syns, och skalans tal står utanför till höger.
-    /// BESLUT B152. Kurvan ligger kant till kant på skärmen: smal kant till vänster, plats för skalans tal till höger.
-    static let kant: (vänster: CGFloat, höger: CGFloat) = (16, 34)
+    /// BESLUT B152. Kurvan ligger kant till kant på skärmen: till vänster plats för halva klockslaget under Start, till höger för skalans tal.
+    static let kant: (vänster: CGFloat, höger: CGFloat) = (26, 34)
     private static let ytaHöjd: CGFloat = 300
     /// Ritytan ovanför klockslagen.
     private static let topp: CGFloat = 12
