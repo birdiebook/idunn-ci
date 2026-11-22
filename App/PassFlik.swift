@@ -14,12 +14,13 @@ import SleepNeed
 enum PassZonTrappa {
     static func color(_ zon: Int) -> Color {
         switch zon {
-        // BESLUT B145 · BESLUT B137. Zonerna har färg, och bara zonerna: grå, blå, grön, orangegul, röd; vila är mörk.
-        case 1: return Color(rgb: 0x9AA4AB)
-        case 2: return Color(rgb: 0x4F9BEA)
-        case 3: return Color(rgb: 0x4CC38A)
-        case 4: return Color(rgb: 0xF5A524)
-        case 5: return Color(rgb: 0xE5484D)
+        // BESLUT B145 · BESLUT B137 · BESLUT B146. Zonerna har färg, och bara zonerna: grå, blå, grön, orangegul, röd,
+        // dova (lägre mättnad) så att de passar det mörka; vila är mörk.
+        case 1: return Color(rgb: 0x7F888E)
+        case 2: return Color(rgb: 0x5281B4)
+        case 3: return Color(rgb: 0x4E9C7A)
+        case 4: return Color(rgb: 0xC39148)
+        case 5: return Color(rgb: 0xB55A5E)
         default: return Color(rgb: 0x1F262A)
         }
     }
@@ -29,6 +30,8 @@ enum PassZonTrappa {
 struct ZonRemsa: View {
     let zoner: [PassZones.Share]
     var höjd: CGFloat = 6
+    /// BESLUT B146. Den valda zonen; de andra tonas ner. nil = alla i full ton.
+    var vald: Int? = nil
 
     private var delar: [PassZones.Share] {
         zoner.filter { (z: PassZones.Share) -> Bool in z.zone >= 1 && z.seconds > 0 }
@@ -45,6 +48,7 @@ struct ZonRemsa: View {
                     ForEach(delar, id: \.zone) { (z: PassZones.Share) in
                         Capsule()
                             .fill(PassZonTrappa.color(z.zone))
+                            .opacity(vald == nil || vald == z.zone ? 1 : 0.3)
                             .frame(width: max(3, rum * CGFloat(z.seconds / summa)))
                     }
                 }
@@ -316,8 +320,6 @@ struct PassForslagKort: View {
     let förslag: [PassDetection.Candidate]
     let nu: Date
     let läggTill: (PassDetection.Candidate) -> Void
-    /// BESLUT B147. Raden öppnar bladet där typen, egna ord, anteckningen och tiderna väljs.
-    var öppna: (PassDetection.Candidate) -> Void = { _ in }
     let inteEtt: (PassDetection.Candidate) -> Void
 
     var body: some View {
@@ -331,28 +333,21 @@ struct PassForslagKort: View {
             }
             ForEach(förslag, id: \.startMinute) { (f: PassDetection.Candidate) in
                 VStack(alignment: .leading, spacing: 10) {
-                    Button { öppna(f) } label: {
-                        HStack(spacing: 12) {
-                            PassIkonruta(symbol: f.kind.map { (k: PassKind) -> String in PassFormat.symbol(k) } ?? "questionmark")
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text((f.kind?.displayName ?? "Pass") + "?")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(Tema.text)
-                                Text(PassForslagText.tid(f, nu: nu))
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(Tema.dim)
-                            }
-                            Spacer(minLength: 8)
-                            Text("\(f.minutes) min")
+                    HStack(spacing: 12) {
+                        PassIkonruta(symbol: f.kind.map { (k: PassKind) -> String in PassFormat.symbol(k) } ?? "questionmark")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text((f.kind?.displayName ?? "Pass") + "?")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(Tema.text)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
+                            Text(PassForslagText.tid(f, nu: nu))
+                                .font(.system(size: 12))
                                 .foregroundStyle(Tema.dim)
                         }
-                        .contentShape(Rectangle())
+                        Spacer(minLength: 8)
+                        Text("\(f.minutes) min")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Tema.text)
                     }
-                    .buttonStyle(.plain)
                     HStack(spacing: 8) {
                         Button { läggTill(f) } label: {
                             Text("Lägg till")
