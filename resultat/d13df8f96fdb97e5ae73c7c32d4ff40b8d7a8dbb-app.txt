@@ -1,0 +1,11 @@
+d13df8f96fdb97e5ae73c7c32d4ff40b8d7a8dbb spegel 2026-11-22T19:59:06Z run 45063759428
+== app (xcodebuild build-for-testing, simulator)
+RÖTT: bygget föll (kod 1), 0 felrader
+Command line invocation:
+    /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/xcodebuild build-for-testing -project Idunn.xcodeproj -scheme IdunnProv -destination "generic/platform=iOS Simulator" -configuration Release ENABLE_TESTABILITY=YES CODE_SIGNING_ALLOWED=NO
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+    ENABLE_TESTABILITY = YES
+
+Resolve Package Graph
