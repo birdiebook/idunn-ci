@@ -1,0 +1,190 @@
+b5312916f3984d6da121224211b34c9ba9c14bc9 spegel 2026-11-22T19:43:45Z run 45061613017
+== prov (xcodebuild test, IdunnProv, simulator)
+RÖTT: provet föll (kod 1), 73 bilder
+2026-11-22 19:41:48.591557+0000 Idunn[9818:34062] fopen failed for data file: errno = 2 (No such file or directory)
+2026-11-22 19:41:49.010151+0000 Idunn[9818:34062] fopen failed for data file: errno = 2 (No such file or directory)
+2026-11-22 19:43:22.932764+0000 Idunn[9818:33540] [Idunn] handle_write_error:113: zlib error
+2026-11-22 19:43:22.935158+0000 Idunn[9818:33540] [Idunn] handle_write_error:113: No IDATs written into file
+IOSurfaceClientSetSurfaceNotify failed e00002c7
+Test Case '-[IdunnProv.IdunnProvD2 test3Matt]' passed (11.026 seconds).
+Test Suite 'IdunnProvD2' passed at 2026-11-22 19:43:43.586.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 21.014 (21.018) seconds
+Test Suite 'IdunnProvDagbok' started at 2026-11-22 19:43:43.587.
+Test Case '-[IdunnProv.IdunnProvDagbok test1MorgonensFråga]' started.
+PROV: skrev /tmp/idun_prov/dagbok-morgon.png (1179×1284 px)
+PROV: skrev /tmp/idun_prov/dagbok-morgon-vald.png (1179×1284 px)
+Test Case '-[IdunnProv.IdunnProvDagbok test1MorgonensFråga]' passed (0.100 seconds).
+Test Case '-[IdunnProv.IdunnProvDagbok test2KvällensBlad]' started.
+PROV: skrev /tmp/idun_prov/dagbok-kvall.png (1179×1444 px)
+PROV: skrev /tmp/idun_prov/dagbok-kvall-vald.png (1179×1911 px)
+Test Case '-[IdunnProv.IdunnProvDagbok test2KvällensBlad]' passed (0.099 seconds).
+Test Case '-[IdunnProv.IdunnProvDagbok test3FilenFramOchTillbaka]' started.
+PROV: dagbokens fil gick fram och tillbaka (1 kväll, 1 morgon)
+Test Case '-[IdunnProv.IdunnProvDagbok test3FilenFramOchTillbaka]' passed (0.032 seconds).
+Test Suite 'IdunnProvDagbok' passed at 2026-11-22 19:43:43.819.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.232 (0.232) seconds
+Test Suite 'IdunnProvForslag' started at 2026-11-22 19:43:43.819.
+Test Case '-[IdunnProv.IdunnProvForslag testRitaFörslagen]' started.
+PROV: skrev /tmp/idun_prov/forslag-lista.png (1179×3000 px)
+PROV: 40 gamla och 14 K18-nätter räknade på 21 s
+PROV: baslinjen byggs 4 av 7
+PROV: dagbokens fil gick fram och tillbaka (1 kväll, 1 morgon)
+PROV: natten-huvudtal gick inte att rita @3x
+PROV: nattrapport-imagerenderer gick inte att rita med ImageRenderer
+PROV: regelbundenhet 85.20211271251881 ur 14 K18-nätter
+PROV: skrev /tmp/idun_prov/andra-blad-aterstall.png (1179×2700 px)
+PROV: skrev /tmp/idun_prov/andra-blad-fel.png (1179×2700 px)
+PROV: skrev /tmp/idun_prov/andra-blad.png (1179×2700 px)
+PROV: skrev /tmp/idun_prov/aterhamtning-huvudtal.png (1179×5390 px)
+PROV: skrev /tmp/idun_prov/aterhamtning-utan-baslinje.png (1179×2811 px)
+PROV: skrev /tmp/idun_prov/aterhamtning.png (1179×2811 px)
+PROV: skrev /tmp/idun_prov/coach-fel.png (1179×1380 px)
+PROV: skrev /tmp/idun_prov/coach-kopplad.png (1179×1560 px)
+PROV: skrev /tmp/idun_prov/coach-okopplad.png (1179×1260 px)
+PROV: skrev /tmp/idun_prov/coach-skickar.png (1179×1560 px)
+PROV: skrev /tmp/idun_prov/dagbok-kvall-vald.png (1179×1911 px)
+PROV: skrev /tmp/idun_prov/dagbok-kvall.png (1179×1444 px)
+PROV: skrev /tmp/idun_prov/dagbok-morgon-vald.png (1179×1284 px)
+PROV: skrev /tmp/idun_prov/dagbok-morgon.png (1179×1284 px)
+PROV: skrev /tmp/idun_prov/forslag-lista.png (1179×3000 px)
+PROV: skrev /tmp/idun_prov/k18-kurva-ljud-markerad.png (1179×4790 px)
+PROV: skrev /tmp/idun_prov/k18-kurva-ljud.png (1179×4749 px)
+PROV: skrev /tmp/idun_prov/k18-kurva-stadium.png (1179×3594 px)
+PROV: skrev /tmp/idun_prov/k18-kurva.png (1179×3560 px)
+PROV: skrev /tmp/idun_prov/ljud-rapport.png (1179×4677 px)
+PROV: skrev /tmp/idun_prov/lyssnaren.png (1179×1841 px)
+PROV: skrev /tmp/idun_prov/matt-andning.png (1179×1822 px)
+PROV: skrev /tmp/idun_prov/matt-hrv-halvor.png (1179×2169 px)
+PROV: skrev /tmp/idun_prov/matt-hrv-lag-borjan.png (1179×2216 px)
+PROV: skrev /tmp/idun_prov/matt-hrv-utan-baslinje.png (1179×1822 px)
+PROV: skrev /tmp/idun_prov/matt-hrv-utan-k18.png (1179×1762 px)
+PROV: skrev /tmp/idun_prov/matt-hrv.png (1179×1822 px)
+PROV: skrev /tmp/idun_prov/matt-hudtemp-utan-baslinje.png (1179×1893 px)
+PROV: skrev /tmp/idun_prov/matt-hudtemp-utan-k18.png (1179×1833 px)
+PROV: skrev /tmp/idun_prov/matt-hudtemp.png (1179×1893 px)
+PROV: skrev /tmp/idun_prov/matt-ljud-utan-ljud.png (1179×1167 px)
+PROV: skrev /tmp/idun_prov/matt-ljud.png (1179×2269 px)
+PROV: skrev /tmp/idun_prov/matt-rorelse.png (1179×1822 px)
+PROV: skrev /tmp/idun_prov/morgon-fel.png (1179×1549 px)
+PROV: skrev /tmp/idun_prov/morgon-foregaende.png (1179×1086 px)
+PROV: skrev /tmp/idun_prov/morgon-huvudtal.png (1179×2456 px)
+PROV: skrev /tmp/idun_prov/morgon-utan-baslinje.png (1179×1398 px)
+PROV: skrev /tmp/idun_prov/morgon-utan-k18.png (1179×1086 px)
+PROV: skrev /tmp/idun_prov/morgon-utan-ljud.png (1179×1086 px)
+PROV: skrev /tmp/idun_prov/morgon-utan-stadier.png (1179×1340 px)
+PROV: skrev /tmp/idun_prov/morgon.png (1179×1340 px)
+PROV: skrev /tmp/idun_prov/natten-andrad.png (1179×5843 px)
+PROV: skrev /tmp/idun_prov/natten-huvudtal.png (786×6829 px)
+PROV: skrev /tmp/idun_prov/natten-utan-baslinje.png (1179×5843 px)
+PROV: skrev /tmp/idun_prov/natten-utan-k18.png (1179×5610 px)
+PROV: skrev /tmp/idun_prov/natten-utan-stadier.png (1179×5610 px)
+PROV: skrev /tmp/idun_prov/natten.png (1179×5843 px)
+PROV: skrev /tmp/idun_prov/nattens-kurva-markerad.png (1179×2225 px)
+PROV: skrev /tmp/idun_prov/nattens-kurva.png (1179×2204 px)
+PROV: skrev /tmp/idun_prov/natter-rader.png (1179×2038 px)
+PROV: skrev /tmp/idun_prov/nattrapport-delar.png (1179×2210 px)
+PROV: skrev /tmp/idun_prov/skarm-aterhamtning-huvudtal.png (1179×7500 px)
+PROV: skrev /tmp/idun_prov/skarm-aterhamtning.png (1179×7500 px)
+PROV: skrev /tmp/idun_prov/skarm-data.png (1179×8100 px)
+bild: andra-blad-aterstall.png
+bild: andra-blad-fel.png
+bild: andra-blad.png
+bild: aterhamtning-huvudtal.png
+bild: aterhamtning-utan-baslinje.png
+bild: aterhamtning.png
+bild: coach-fel.png
+bild: coach-kopplad.png
+bild: coach-okopplad.png
+bild: coach-skickar.png
+bild: dagbok-kvall-vald.png
+bild: dagbok-kvall.png
+bild: dagbok-morgon-vald.png
+bild: dagbok-morgon.png
+bild: forslag-lista.png
+bild: k18-kurva-ljud-markerad.png
+bild: k18-kurva-ljud.png
+bild: k18-kurva-stadium.png
+bild: k18-kurva.png
+bild: ljud-rapport.png
+bild: lyssnaren.png
+bild: matt-andning.png
+bild: matt-hrv-halvor.png
+bild: matt-hrv-lag-borjan.png
+bild: matt-hrv-utan-baslinje.png
+bild: matt-hrv-utan-k18.png
+bild: matt-hrv.png
+bild: matt-hudtemp-utan-baslinje.png
+bild: matt-hudtemp-utan-k18.png
+bild: matt-hudtemp.png
+bild: matt-ljud-utan-ljud.png
+bild: matt-ljud.png
+bild: matt-rorelse.png
+bild: morgon-fel.png
+bild: morgon-foregaende.png
+bild: morgon-huvudtal.png
+bild: morgon-utan-baslinje.png
+bild: morgon-utan-k18.png
+bild: morgon-utan-ljud.png
+bild: morgon-utan-stadier.png
+bild: morgon.png
+bild: natten-andrad.png
+bild: natten-huvudtal.png
+bild: natten-utan-baslinje.png
+bild: natten-utan-k18.png
+bild: natten-utan-stadier.png
+bild: natten.png
+bild: nattens-kurva-markerad.png
+bild: nattens-kurva.png
+bild: natter-rader.png
+bild: nattrapport-delar.png
+bild: skarm-aterhamtning-huvudtal.png
+bild: skarm-aterhamtning.png
+bild: skarm-data.png
+bild: skarm-idunn-mot-whoop.png
+bild: skarm-k18-kurva-ljud.png
+bild: skarm-k18-kurva.png
+bild: skarm-matt-andning.png
+bild: skarm-matt-hrv.png
+bild: skarm-matt-hudtemp.png
+bild: skarm-matt-ljud.png
+bild: skarm-matt-rorelse.png
+bild: skarm-morgon-batteri-lagt.png
+bild: skarm-morgon-fel.png
+bild: skarm-morgon-foregaende.png
+bild: skarm-morgon-huvudtal.png
+bild: skarm-morgon-ingen-natt.png
+bild: skarm-morgon-raknar.png
+bild: skarm-morgon-tom-fel.png
+bild: skarm-morgon-utan-baslinje.png
+bild: skarm-morgon-utan-k18.png
+bild: skarm-morgon-utan-stadier.png
+bild: skarm-morgon-vantar.png
+bild: skarm-morgon.png
+bild: skarm-natten-andrad.png
+bild: skarm-natten-huvudtal.png
+bild: skarm-natten.png
+bild: skarm-nattens-kurva.png
+bild: skarm-natter-tom.png
+bild: skarm-natter.png
+bild: skarm-nattrapport.png
+bild: skarm-trend-6m.png
+bild: skarm-trend.png
+bild: skarm-whoop-natter.png
+bild: trend-6m-vilopuls.png
+bild: trend-6m.png
+bild: trend-aterhamtning-huvudtal.png
+bild: trend-aterhamtning.png
+bild: trend-djupsomn.png
+bild: trend-effektivitet.png
+bild: trend-hudtemp.png
+bild: trend-m-bakat.png
+bild: trend-m.png
+bild: trend-markerad.png
+bild: trend-snarkning.png
+bild: trend-sombrist-huvudtal.png
+bild: trend-somn.png
+bild: trend-utan-baslinje.png
+bild: trend-v-somn.png
+bild: trend-v.png
+bild: trend-val.png
+bild: whoop-natter-rader.png
