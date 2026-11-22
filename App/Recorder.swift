@@ -229,9 +229,6 @@ final class Recorder: NSObject, ObservableObject {
                                                name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appWillTerminate),
                                                name: UIApplication.willTerminateNotification, object: nil)
-        // BESLUT B149. En minnesvarning i loggen förklarar en natt där appen tystnar och startas om.
-        NotificationCenter.default.addObserver(self, selector: #selector(memoryWarning),
-                                               name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
         reloadSummaries()
         seedStatus()
         // PLAN.md A3. Den automatiska hämtningen: förra hämtningens tider, och regeln en gång i minuten medan appen
@@ -241,16 +238,7 @@ final class Recorder: NSObject, ObservableObject {
             self?.considerAutoFetch()
         }
         // PLAN.md A3. Startad i bakgrunden = väckt för bandet; i förgrunden = användaren öppnade appen.
-        // BESLUT B149. Läget står alltid, så att en start mitt i natten går att tolka.
-        let läge: String = {
-            switch UIApplication.shared.applicationState {
-            case .background: return "i bakgrunden"
-            case .inactive: return "inaktiv"
-            case .active: return "aktiv"
-            @unknown default: return "okänt läge"
-            }
-        }()
-        logEvent(.appStarted, text: läge)
+        logEvent(.appStarted, text: UIApplication.shared.applicationState == .background ? "i bakgrunden" : nil)
     }
 
     // MARK: Dygnsfilen
@@ -607,7 +595,6 @@ final class Recorder: NSObject, ObservableObject {
         } else {
             link = .connecting
             central?.connect(p, options: nil)
-            logEvent(.connecting, text: "väntar på bandet")
         }
     }
 
@@ -621,9 +608,7 @@ final class Recorder: NSObject, ObservableObject {
         }
         switch b.state {
         case .connected: didConnect(b)
-        case .connecting:
-            link = .connecting
-            logEvent(.connecting, text: "redan väntande")
+        case .connecting: link = .connecting
         default: connect(b)
         }
     }
@@ -826,12 +811,7 @@ final class Recorder: NSObject, ObservableObject {
     }
 
     /// Appen avslutas: stoppet går direkt om ett prov (BESLUT B53) eller passets puls (BESLUT B61) pågår.
-    @objc private func memoryWarning() {
-        logEvent(.memoryWarning)
-    }
-
     @objc private func appWillTerminate() {
-        logEvent(.terminating)
         runImu(imu.flushStop(now: Date()))
         runPulse(pulse.flushStop(now: Date()))
         syncFiles()
@@ -879,6 +859,39 @@ extension Recorder {
     /// användaren stoppar provet.
     func stopImu() {
         runImu(imu.stop(now: Date(), reason: .user))
+    }
+}
+
+// MARK: - Rörelsen under ett pass
+
+extension Recorder {
+    /// BESLUT B147 · METOD M84. Passets Start: bandets rörelse i 100 Hz så länge passet går, med passets tidsgräns.
+    /// Ett IMU-prov som redan går får gå klart (`ImuControl.start` svarar inget). En hämtning som pågår får gå
+    /// klart först: kommandona väntar på den.
+    func startPassImu() {
+        let a: [ImuControl.Action] = imu.start(now: Date(), owner: .pass)
+        guard !a.isEmpty else { return }
+        runImu(a)
+        imuBatteryNote("start")
+    }
+
+    /// BESLUT B147. Passets Stopp (före efterperioden): strömmen stoppas, om passet äger den.
+    func stopPassImu() {
+        guard imu.owner == .pass, imu.phase == .starting || imu.phase == .on else { return }
+        imuBatteryNote("stopp")
+        runImu(imu.stop(now: Date(), reason: .pass))
+    }
+
+    /// BESLUT B147 · METOD M84. Bandets och telefonens batteri i procent i sidofilen, vid passets start och stopp:
+    /// apparaternas läge, inget mätvärde om kroppen. `?` när nivån inte är känd.
+    private func imuBatteryNote(_ när: String) {
+        let enhet = UIDevice.current
+        enhet.isBatteryMonitoringEnabled = true
+        let tel: String = enhet.batteryLevel < 0 ? "?" : String(Int((enhet.batteryLevel * 100).rounded()))
+        let bandet: String = battery.map { (b: Int) -> String in String(b) } ?? "?"
+        let now = Date()
+        ensureDay(at: now)
+        sideFile?.append(RecordingLog.marker("imu-batteri \(när) band \(bandet) telefon \(tel)", at: now))
     }
 }
 
@@ -990,18 +1003,6 @@ extension Recorder {
 
 extension Recorder: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ c: CBCentralManager) {
-        // BESLUT B149. Läget i loggen: efter en omstart syns om Bluetooth kom på och om en anslutning lades.
-        let ord: String = {
-            switch c.state {
-            case .poweredOn: return "på"
-            case .poweredOff: return "av"
-            case .resetting: return "återställs"
-            case .unauthorized: return "nekad"
-            case .unsupported: return "saknas"
-            default: return "okänt"
-            }
-        }()
-        logEvent(.bluetooth, text: ord)
         switch c.state {
         case .poweredOn:
             resumeListening()
@@ -1071,13 +1072,9 @@ extension Recorder: CBCentralManagerDelegate {
         liveStream = FrameAssembly.Stream()
         // METOD M23. Det som inte kvitterats ligger kvar i bandet.
         if fetching, let mer = session?.disconnected() { run(mer) }
-        guard c.state == .poweredOn else {
-            logEvent(.connecting, text: "ingen ny anslutning: bluetooth inte på")
-            return
-        }
+        guard c.state == .poweredOn else { return }
         link = .connecting
         c.connect(p, options: nil)
-        logEvent(.connecting, text: "efter frånkoppling")
     }
 }
 

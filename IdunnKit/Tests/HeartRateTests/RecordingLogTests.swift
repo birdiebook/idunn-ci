@@ -143,7 +143,7 @@ final class RecordingLogTests: XCTestCase {
         XCTAssertEqual(RecordingLog.Link.allCases.map(\.rawValue),
                        ["ansluten", "tjänster klara", "frånkopplad", "anslutning misslyckades", "imu tyst", "imu igen",
                         "appen startad", "väckt av iOS", "i förgrunden", "i bakgrunden", "hämtning klar",
-                        "hämtning stoppad", "nätter räknade", "bluetooth", "ansluter", "minnesvarning", "avslutas"])
+                        "hämtning stoppad", "nätter räknade"])
         let lång = RecordingLog.decode(RecordingLog.link(.failedToConnect, code: 1, text: String(repeating: "y", count: 500),
                                                          at: Date(timeIntervalSince1970: t0)))
         XCTAssertEqual(lång.links.first?.text?.count, 120)

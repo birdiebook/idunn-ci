@@ -72,14 +72,6 @@ public enum RecordingLog {
         case fetchStopped = "hämtning stoppad"
         /// PLAN.md A3. Nätterna räknades och minst en sparades.
         case nightsComputed = "nätter räknade"
-        /// BESLUT B149. Bluetooth i telefonen bytte läge; texten säger vilket (på, av, återställs, nekad, okänt).
-        case bluetooth = "bluetooth"
-        /// BESLUT B149. Appen lade en väntande anslutning på bandet; texten säger varför (start, tappat, misslyckat).
-        case connecting = "ansluter"
-        /// BESLUT B149. iOS varnade för att minnet tar slut; en app i bakgrunden kan stängas strax efter.
-        case memoryWarning = "minnesvarning"
-        /// BESLUT B149. iOS sa till att appen avslutas (kommer inte när en app i bakgrunden stängs tyst).
-        case terminating = "avslutas"
     }
 
     /// PLAN.md A3. Orden för en hämtnings slut, som `NightLedger` räknar om nätter efter.

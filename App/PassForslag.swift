@@ -34,9 +34,11 @@ enum PassForslag {
         NightFiles.write(data, to: fil)
     }
 
-    /// Bandets sekunder från `now - bakåtSekunder` till `now`, och samma poster som pulsprov för att fylla ett pass.
+    /// Bandets sekunder från början av det lokala dygnet `bakåtSekunder` före `now` till `now`, och samma poster som
+    /// pulsprov för att fylla ett pass. BESLUT B151: knuten K3 räknar dygnets medianpuls per kalenderdygn, så det
+    /// äldsta dygnet läses helt; ett dygn som börjar mitt på dagen saknar natten och får en för hög nivå.
     static func sekunder(now: Date) -> (sekunder: [PassSuggestions.Second], poster: [PassHistory.Reading]) {
-        let från: Date = now.addingTimeInterval(-bakåtSekunder)
+        let från: Date = Calendar.current.startOfDay(for: now.addingTimeInterval(-bakåtSekunder))
         let zon: Int = TimeZone.current.secondsFromGMT(for: från)
         var samlare = K18Collector(from: från, to: now)
         for stam in DayLog.stems(touching: från, to: now.addingTimeInterval(1), utcOffsetSeconds: zon) {

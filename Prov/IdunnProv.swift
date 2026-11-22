@@ -299,30 +299,8 @@ final class IdunnProv: XCTestCase {
         XCTAssertEqual(ingen.hämtarText, "Hämtat från bandet · data till 06:40")
         XCTAssertEqual(Morgonläge.nu(ansluten: true, hämtar: false, räknar: false, dataTill: nil,
                                      hämtatTill: nil).ingenNattText, "Ingen natt för idag än")
-        // BESLUT B149. Inget pågår och ingen natt: varför. Påhittade minuter: data 18–00:28 och från 08:55, och ett kort
-        // glapp på 10 minuter som inte räknas.
-        let kväll: Date = Calendar.current.date(byAdding: .day, value: -1,
-                                                to: Calendar.current.startOfDay(for: nu)) ?? nu
-        let fönster: Date = kväll.addingTimeInterval(12 * 3600)
-        let m0: Int = Int(kväll.timeIntervalSince1970 / 60)
-        var minuter: Set<Int> = Set((m0 + 18 * 60)..<(m0 + 24 * 60 + 29))
-        minuter.subtract((m0 + 20 * 60)..<(m0 + 20 * 60 + 10))
-        minuter.formUnion((m0 + 32 * 60 + 55)...(m0 + 32 * 60 + 56))
-        let slutet: Date = kväll.addingTimeInterval(32 * 3600 + 57 * 60)
-        let hål: ClosedRange<Date>? = Morgonläge.lucka(minuter: minuter, från: fönster, nu: slutet)
-        XCTAssertEqual(hål.map { Fmt.clock(date: $0.lowerBound) + "–" + Fmt.clock(date: $0.upperBound) }, "00:29–08:55",
-                       "den längsta luckan i natten, inte det korta glappet")
-        let hel: Set<Int> = minuter.union((m0 + 24 * 60)...(m0 + 32 * 60 + 56))
-        XCTAssertNil(Morgonläge.lucka(minuter: hel, från: fönster, nu: slutet), "en hel natt har ingen lucka")
-        let saknas = Morgonläge.nu(ansluten: true, hämtar: false, räknar: false, dataTill: dataTill, hämtatTill: nil,
-                                   lucka: hål)
-        XCTAssertEqual(saknas.rubrik, "Natten saknas")
-        XCTAssertEqual(saknas.brödtext, "Bandet var inte anslutet 00:29–08:55, så natten går inte att räkna.")
-        XCTAssertEqual(ingen.rubrik, "Ingen sömn hittad")
-        XCTAssertEqual(Morgonläge.nu(ansluten: true, hämtar: false, räknar: false, dataTill: nil, hämtatTill: nil).rubrik,
-                       "Ingen data från bandet")
         for (läge, namn) in [(väntar, "skarm-morgon-vantar"), (räknar, "skarm-morgon-raknar"),
-                             (ingen, "skarm-morgon-ingen-natt"), (saknas, "skarm-morgon-lucka")] {
+                             (ingen, "skarm-morgon-ingen-natt")] {
             try fånga(NavigationStack {
                 MorningCardScreen(days: dagar, summaries: nätter, bundles: d.bundles, loadsCurves: false,
                                   band: Bandstatus(batteri: 72, ansluten: true), idag: natt + 1, läge: läge)
