@@ -1,0 +1,3 @@
+b89e1d92ad5313effc104443f874719e652ae4e8 spegel 2026-11-22T12:08:32Z run 45020706517
+== app (xcodebuild build-for-testing, simulator)
+RÖTT: bygget föll (kod 1), 0 felrader
