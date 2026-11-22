@@ -1,0 +1,3 @@
+b8f3e6e05baa35c0a5837a81ce978b8967efc747 spegel 2026-11-22T12:57:33Z run 45024326110
+== app (xcodebuild build-for-testing, simulator)
+GRÖNT: appen och provet kompilerar
