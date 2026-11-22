@@ -669,11 +669,15 @@ struct PassDetail: View {
         }
     }
 
-    /// BESLUT B146. Så lång tid före Start som kurvan visar: lika lång som mätningen efter stopp, så att passet står i
-    /// mitten. 0 för ett pass utan stopp.
-    private var föreSekunder: TimeInterval {
+    /// BESLUT B146. Pulskurvans kant på var sida om passet: en tiondel av passets längd, minst 30 s och högst så lång
+    /// som mätningen efter stopp. Lika lång före Start som efter Stopp, så att passet står i mitten och tar det mesta
+    /// av bredden. 0 för ett pass utan stopp.
+    static let kantAndel: Double = 0.1
+    static let kantMinst: TimeInterval = 30
+    private var kantSekunder: TimeInterval {
         guard let stop = pass.stop else { return 0 }
-        return max(0, (pass.afterEnd ?? stop).timeIntervalSince(stop))
+        let efter: TimeInterval = max(0, (pass.afterEnd ?? stop).timeIntervalSince(stop))
+        return min(efter, max(Self.kantMinst, Self.kantAndel * pass.duration))
     }
 
     /// BESLUT B138. Kurvan som visas: den valda när den finns för passet, annars Puls.
@@ -695,7 +699,10 @@ struct PassDetail: View {
     }
 
     private func kurvkort(_ vald: PassKurvVal, tempo: [PassSeries.Point], höjd: [PassSeries.Point]) -> some View {
-        let slutPuls: TimeInterval = (pass.afterEnd ?? pass.stop ?? pass.start).timeIntervalSince(pass.start)
+        // BESLUT B146. Pulskurvan slutar en kant efter Stopp; mätningen efter stopp kan vara längre än så.
+        let slutPuls: TimeInterval = pass.stop.map { (s: Date) -> TimeInterval in
+            s.timeIntervalSince(pass.start) + kantSekunder
+        } ?? (pass.afterEnd ?? pass.start).timeIntervalSince(pass.start)
         let stopp: TimeInterval? = pass.stop.map { (s: Date) -> TimeInterval in s.timeIntervalSince(pass.start) }
         return VStack(alignment: .leading, spacing: 8) {
             switch vald {
@@ -716,8 +723,12 @@ struct PassDetail: View {
                 // BESLUT B144 · METOD M83. Pulsen som medel över fönster, och linjen i zonernas färg.
                 let fönster: TimeInterval = PassSeries.window(length: slutPuls)
                 PassKortRubrik(text: "Puls")
-                PassKurva(punkter: PassSeries.averaged(förePuls + PassSeries.pulse(pass), window: fönster, split: stopp),
-                          längd: slutPuls, start: pass.start, stopp: stopp, före: föreSekunder,
+                let kant: TimeInterval = kantSekunder
+                let synligt: [PassSeries.Point] = (förePuls + PassSeries.pulse(pass)).filter { (q: PassSeries.Point) -> Bool in
+                    q.seconds >= -kant && q.seconds <= slutPuls
+                }
+                PassKurva(punkter: PassSeries.averaged(synligt, window: fönster, split: stopp),
+                          längd: slutPuls, start: pass.start, stopp: stopp, före: kant,
                           lucka: 2 * fönster + 10,
                           band: zonband,
                           text: { (v: Double) -> String in String(Int(v.rounded())) },
@@ -782,7 +793,7 @@ struct PassDetail: View {
         .background(Tema.bg)
         // BESLUT B146. Pulsen före Start ur dygnens filer, på en bakgrundskö (en dygnsfil kan vara tiotals MB).
         .task(id: pass.id) {
-            let sek: TimeInterval = föreSekunder
+            let sek: TimeInterval = kantSekunder
             guard sek > 0, förePuls.isEmpty else { return }
             let p: Pass = pass
             let poster: [PassHistory.Reading] = await Task.detached(priority: .utility) {
