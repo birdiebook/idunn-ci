@@ -1,0 +1,20 @@
+e8dbed6472de4d3dcb96ad4f887b26b5e117cc58 spegel 2026-11-22T18:40:08Z run 45055985031
+== swift-release
+GRÖNT: 1082 test, 0 fel, 59 s i testerna, bygget 155 s
+Långsammast (av 1082):
+      5.8 s  DemoDataTests.testIdunnsHudtempLiggerUnderWhoopsOchSaknasPåNätterUnderMinstaTäckning
+      2.3 s  NightSoundTests.testNattenLäserSittLjudNärDenRäknasOchSammanfattningenBärDet
+      2.1 s  K18DaysTests.testEnAnnanNattIFilernaPåverkarInteDennaNatt
+      2.0 s  SleepEditTests.testComputeDueRäknarDenÄndradeNattenOchÅterställer
+      2.0 s  K18InspelningarTests.testEnSekundIBådeInspelningOchDygnRäknasEnGång
+      2.0 s  K18DaysTests.testEttNyttByggeRäknarOmEnNattUrArkivetMedDetNyaRäknesättet
+      1.8 s  K18DaysTests.testEttDygnSomArkivOchEttSomRådygnGerSammaNatt
+      1.8 s  NattvalVaktTests.testEnNattUtanDygnetEfterSaknarInteLager
+      1.8 s  K18DaysTests.testNattenUrArkivenÄrSammaNattSomUrDygnsfilerna
+      1.5 s  NightSoundTests.testAnalysenLämnarSammanfattningenFörExportenTillAppen
+      1.2 s  PahittatBandTests.testHämtningDagenEfterFinnsMedNärNattenSattSig
+      1.2 s  PahittatBandTests.testTappatBandMittIEnBitTasUppNästaGångUtanEnFörloradSekund
+      1.2 s  PahittatBandTests.testSparfelKvitterarIngentingOchNästaHämtningFårAllt
+      1.1 s  NattvalVaktTests.testEnNattMedK18GerLagerOchVäljsFöreInspelningen
+      1.1 s  NattvalVaktTests.testEnK18NattVarsFilerInteGårAttLäsaSaknarLager
+
