@@ -326,4 +326,108 @@ final class ImuControlTests: XCTestCase {
         XCTAssertEqual(stream.stats["fd4b0005"]?.incomplete, 0)
         XCTAssertEqual(c.progress.r21Frames, 120)
     }
+
+    // MARK: Passet (BESLUT B147, METOD M84)
+
+    private func påslagen(_ c: inout ImuControl, owner: ImuControl.Owner, t: Date) {
+        _ = c.start(now: t, owner: owner)
+        _ = c.tick(now: t, canWrite: true)
+        _ = c.tick(now: t + 0.25, canWrite: true)
+    }
+
+    func testPassetHarEgenTidsgränsOchEgetMärke() {
+        var c = ImuControl(now: t0)
+        XCTAssertEqual(c.config.passTimeout, 3 * 3600)
+        XCTAssertEqual(c.start(now: t0, owner: .pass), [.mark("imu-start pass")])
+        XCTAssertEqual(c.owner, .pass)
+        _ = c.tick(now: t0, canWrite: true)
+        _ = c.tick(now: t0 + 0.25, canWrite: true)
+        XCTAssertEqual(c.remaining(now: t0 + 3600), 2 * 3600)
+        // Provets 30 minuter gäller inte passet.
+        XCTAssertEqual(c.tick(now: t0 + 31 * 60, canWrite: true), [])
+        XCTAssertEqual(c.phase, .on)
+        let a = c.tick(now: t0 + 3 * 3600, canWrite: true)
+        XCTAssertEqual(a.first, .mark("imu-stopp tid"))
+        // Provet efteråt har sina 30 minuter igen.
+        _ = c.tick(now: t0 + 3 * 3600 + 0.25, canWrite: true)
+        påslagen(&c, owner: .prov, t: t0 + 4 * 3600)
+        XCTAssertEqual(c.owner, .prov)
+        XCTAssertEqual(c.remaining(now: t0 + 4 * 3600 + 60), 29 * 60)
+    }
+
+    func testPassetStartarOmEnGångNärRörelsenÄrTyst() {
+        var c = ImuControl(now: t0)
+        XCTAssertEqual(c.config.restartAfter, 10)
+        påslagen(&c, owner: .pass, t: t0)
+        XCTAssertEqual(c.watch(now: t0 + 1, linkUp: true), [])
+        // Ingen rörelse efter starten: tyst efter 3 s, ny start efter 10 s.
+        XCTAssertEqual(c.watch(now: t0 + 4.2, linkUp: true), [.link(.imuSilent)])
+        XCTAssertEqual(c.watch(now: t0 + 10.9, linkUp: true), [])
+        XCTAssertEqual(c.watch(now: t0 + 11.1, linkUp: true), [.mark("imu-omstart")])
+        XCTAssertEqual(c.phase, .on)
+        XCTAssertEqual(skrivna(c.tick(now: t0 + 11.1, canWrite: true)), [[81, 1]])
+        XCTAssertEqual(skrivna(c.tick(now: t0 + 11.35, canWrite: true)), [[106, 1, 1]])
+        XCTAssertEqual(c.progress.restarts, 1)
+        // En gång per anslutning.
+        XCTAssertEqual(c.watch(now: t0 + 30, linkUp: true), [])
+        // Ny anslutning: en ny chans.
+        XCTAssertEqual(c.watch(now: t0 + 31, linkUp: false), [])
+        XCTAssertEqual(c.watch(now: t0 + 40, linkUp: true), [])
+        _ = c.receive(Self.frame(Self.r21(sekund: 40), t: t0 + 41), now: t0 + 41)
+        XCTAssertEqual(c.watch(now: t0 + 50, linkUp: true), [.link(.imuSilent)])
+        XCTAssertEqual(c.watch(now: t0 + 51.1, linkUp: true), [.mark("imu-omstart")])
+        XCTAssertEqual(c.progress.restarts, 2)
+    }
+
+    func testProvetStartarInteOm() {
+        var c = ImuControl(now: t0)
+        påslagen(&c, owner: .prov, t: t0)
+        _ = c.watch(now: t0 + 1, linkUp: true)
+        XCTAssertEqual(c.watch(now: t0 + 30, linkUp: true), [.link(.imuSilent)])
+        XCTAssertFalse(c.wantsWrite)
+        XCTAssertEqual(c.progress.restarts, 0)
+    }
+
+    func testEnNyStartSomInteGårAttSkrivaStopparIntePasset() {
+        var c = ImuControl(now: t0)
+        påslagen(&c, owner: .pass, t: t0)
+        _ = c.watch(now: t0 + 1, linkUp: true)
+        XCTAssertEqual(c.watch(now: t0 + 12, linkUp: true).last, .mark("imu-omstart"))
+        _ = c.tick(now: t0 + 12, canWrite: true)
+        XCTAssertEqual(c.writeFailed(now: t0 + 12.1), [])
+        XCTAssertEqual(c.phase, .on)
+        XCTAssertFalse(c.wantsWrite)
+        // Ett fel i passets första start stoppar som för provet.
+        var d = ImuControl(now: t0)
+        _ = d.start(now: t0, owner: .pass)
+        _ = d.tick(now: t0, canWrite: true)
+        XCTAssertEqual(d.writeFailed(now: t0 + 0.1), [.mark("imu-stopp skrivfel")])
+    }
+
+    func testPassetTarÖverEfterEnOmstart() {
+        // Appen dog under ett pass: stoppet ligger i kön. Passet tas upp igen innan något skrivits.
+        var c = ImuControl(now: t0, stopAtStart: true)
+        XCTAssertEqual(c.start(now: t0 + 1), [], "provet tar inte över")
+        XCTAssertEqual(c.start(now: t0 + 1, owner: .pass), [.mark("imu-start pass")])
+        XCTAssertEqual(skrivna(c.tick(now: t0 + 2, canWrite: true)), [[81, 1]])
+        XCTAssertEqual(skrivna(c.tick(now: t0 + 2.25, canWrite: true)), [[106, 1, 1]])
+        XCTAssertEqual(c.phase, .on)
+        // Har stoppet redan börjat skrivas går det klart, och passet startar efteråt.
+        var d = ImuControl(now: t0, stopAtStart: true)
+        XCTAssertEqual(skrivna(d.tick(now: t0, canWrite: true)), [[82, 1]])
+        XCTAssertEqual(d.start(now: t0 + 0.1, owner: .pass), [])
+        _ = d.tick(now: t0 + 0.25, canWrite: true)
+        XCTAssertEqual(d.phase, .off)
+        XCTAssertEqual(d.start(now: t0 + 1, owner: .pass), [.mark("imu-start pass")])
+    }
+
+    func testSkyddetLåterPassetsStrömVara() {
+        var c = ImuControl(now: t0)
+        påslagen(&c, owner: .pass, t: t0)
+        for s in 1..<5 {
+            XCTAssertEqual(c.receive(Self.frame(Self.r21(sekund: UInt32(s)), t: t0 + Double(s)), now: t0 + Double(s)), [])
+        }
+        XCTAssertEqual(c.failsafeStops, 0)
+        XCTAssertEqual(c.progress.r21Frames, 4)
+    }
 }

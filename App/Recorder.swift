@@ -862,6 +862,39 @@ extension Recorder {
     }
 }
 
+// MARK: - Rörelsen under ett pass
+
+extension Recorder {
+    /// BESLUT B147 · METOD M84. Passets Start: bandets rörelse i 100 Hz så länge passet går, med passets tidsgräns.
+    /// Ett IMU-prov som redan går får gå klart (`ImuControl.start` svarar inget). En hämtning som pågår får gå
+    /// klart först: kommandona väntar på den.
+    func startPassImu() {
+        let a: [ImuControl.Action] = imu.start(now: Date(), owner: .pass)
+        guard !a.isEmpty else { return }
+        runImu(a)
+        imuBatteryNote("start")
+    }
+
+    /// BESLUT B147. Passets Stopp (före efterperioden): strömmen stoppas, om passet äger den.
+    func stopPassImu() {
+        guard imu.owner == .pass, imu.phase == .starting || imu.phase == .on else { return }
+        imuBatteryNote("stopp")
+        runImu(imu.stop(now: Date(), reason: .pass))
+    }
+
+    /// BESLUT B147 · METOD M84. Bandets och telefonens batteri i procent i sidofilen, vid passets start och stopp:
+    /// apparaternas läge, inget mätvärde om kroppen. `?` när nivån inte är känd.
+    private func imuBatteryNote(_ när: String) {
+        let enhet = UIDevice.current
+        enhet.isBatteryMonitoringEnabled = true
+        let tel: String = enhet.batteryLevel < 0 ? "?" : String(Int((enhet.batteryLevel * 100).rounded()))
+        let bandet: String = battery.map { (b: Int) -> String in String(b) } ?? "?"
+        let now = Date()
+        ensureDay(at: now)
+        sideFile?.append(RecordingLog.marker("imu-batteri \(när) band \(bandet) telefon \(tel)", at: now))
+    }
+}
+
 // MARK: - Pulsen under ett pass
 
 extension Recorder {

@@ -50,6 +50,8 @@ final class PassController: ObservableObject {
     private let metronom = Metronom()
     /// BESLUT B107 · BESLUT B110. Platsen är på bara i fasen running i ett pass ute.
     private var platsOn = false
+    /// BESLUT B147 · METOD M84. Bandets rörelse i 100 Hz är på bara i fasen running.
+    private var imuOn = false
     private lazy var plats: PassPlats = {
         let p = PassPlats()
         p.onPoint = { [weak self] (punkt: TrackPoint) -> Void in self?.receivedPoint(punkt) }
@@ -402,6 +404,7 @@ final class PassController: ObservableObject {
             endMeasuring()
         }
         syncPlats()
+        syncImu()
         syncMetronom()
         UIApplication.shared.isIdleTimerDisabled = state.wantsPulse
     }
@@ -416,6 +419,19 @@ final class PassController: ObservableObject {
         } else if !ska, platsOn {
             platsOn = false
             plats.stop()
+        }
+    }
+
+    /// BESLUT B147 · METOD M84. Rörelsen i 100 Hz på från Start till Stopp, för alla slag av pass; av i efterperioden,
+    /// vid klar och när ett pass som tas upp igen redan är i efterperioden (`adopt` → `changed`).
+    private func syncImu() {
+        let ska: Bool = state.phase == .running
+        if ska, !imuOn {
+            imuOn = true
+            Recorder.shared.startPassImu()
+        } else if !ska, imuOn {
+            imuOn = false
+            Recorder.shared.stopPassImu()
         }
     }
 
