@@ -1,8 +1,5 @@
 // RITAR FÖRSLAGEN I PASSLISTAN TILL PNG (BESLUT B121, METOD M69): listan Förslag överst på fliken Pass
 // (`forslag-lista`) och bladet där typen väljs, med en gissad typ (`forslag-blad`) och utan (`forslag-blad-utan-typ`).
-// Märkningen (BESLUT B150, METOD M85): förslagsbladet med Annat och flyttade tider (`forslag-blad-annat`), ett sparat
-// pass med egna ord och anteckning (`pass-egen-typ`), bladet Ändra (`pass-andra`) och bladet efter Stopp
-// (`pass-efter-markning`).
 //
 // DATAN ÄR PÅHITTAD: två förslag och ett sparat pass relativt en fast tid. Riktig hälsodata får aldrig in här —
 // CLAUDE.md §Dataregeln. Egen klass och eget ritverktyg, som IdunnProvUte.
@@ -58,52 +55,6 @@ final class IdunnProvForslag: XCTestCase {
                     .background(Tema.bg), namn: "forslag-blad", höjd: 700)
         try fånga(FörslagBlad(förslag: utanTyp, nu: nu, läggTill: { _ in }, taBort: {})
                     .background(Tema.bg), namn: "forslag-blad-utan-typ", höjd: 700)
-    }
-
-    // MARK: Märkningen (BESLUT B150, METOD M85)
-
-    /// Påhittade sekunder som bandets poster för ett förslag: puls 130 från en timme före till en timme efter.
-    private func poster(_ f: PassDetection.Candidate) -> [PassHistory.Reading] {
-        let från: Int = f.startMinute * 60 - 3_600
-        return (0..<(f.minutes * 60 + 7_200)).map { (s: Int) -> PassHistory.Reading in
-            PassHistory.Reading(time: från + s, bpm: 120 + Int((15 * sin(Double(s) / 90)).rounded()))
-        }
-    }
-
-    func testRitaMärkningen() throws {
-        let utanTyp: PassDetection.Candidate = förslag(kind: nil, minuter: 41, timmarFöre: 26)
-        let prov: [PassHistory.Reading] = poster(utanTyp)
-        let förhand = { (v: PassForslagsval) -> Pass? in
-            PassSuggestions.pass(from: utanTyp, kind: v.label.kind, readings: prov, label: v.label,
-                                 start: v.start, stop: v.stopp)
-        }
-        // Förslagsbladet med Annat, egna ord, en anteckning, och starten flyttad 12 minuter bakåt.
-        let tider = (start: utanTyp.start.addingTimeInterval(-720), stopp: utanTyp.end.addingTimeInterval(-180))
-        let val = PassMarkningsval(typ: .annat, egna: "Padel", anteckning: "Dubbel, tre set")
-        XCTAssertTrue(val.harTyp)
-        XCTAssertEqual(val.label, PassLabel(customKind: "Padel", note: "Dubbel, tre set"))
-        let blivande: Pass = try XCTUnwrap(förhand(PassForslagsval(label: val.label, start: tider.start, stopp: tider.stopp)))
-        XCTAssertEqual(blivande.kindName, "Padel")
-        XCTAssertEqual(blivande.suggested?.start, utanTyp.start)
-        try fånga(FörslagBlad(förslag: utanTyp, nu: nu, läggTill: { _ in }, taBort: {}, förhand: förhand,
-                              förval: val, tider: tider)
-                    .background(Tema.bg), namn: "forslag-blad-annat", höjd: 1_150)
-
-        // Det sparade passet med egna ord och anteckning, och bladet Ändra på det.
-        let sparat: Pass = PassSuggestions.pass(from: utanTyp, kind: nil, readings: prov, label: val.label,
-                                                start: tider.start, stop: tider.stopp)
-        try fånga(NavigationStack { PassDetail(pass: sparat, zonMaxpuls: 190) }, namn: "pass-egen-typ", höjd: 1_100)
-        try fånga(PassAndraBlad(pass: sparat, nu: nu, spara: { _, _, _ in }), namn: "pass-andra", höjd: 1_150)
-
-        // Bladet efter Stopp: typerna med Annat… och anteckningen.
-        var pågår: Pass = sparat
-        pågår.kind = nil
-        pågår.customKind = nil
-        pågår.note = nil
-        pågår.afterEnd = nil
-        let efterNu: Date = (pågår.stop ?? nu).addingTimeInterval(200)
-        try fånga(PassScreen(phase: .after, pass: pågår, now: efterNu, saved: []), namn: "pass-efter-markning",
-                  höjd: 1_500)
     }
 
     // MARK: Ritverktyget

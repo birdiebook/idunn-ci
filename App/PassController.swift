@@ -50,8 +50,6 @@ final class PassController: ObservableObject {
     private let metronom = Metronom()
     /// BESLUT B107 · BESLUT B110. Platsen är på bara i fasen running i ett pass ute.
     private var platsOn = false
-    /// BESLUT B147 · METOD M84. Bandets rörelse i 100 Hz är på bara i fasen running.
-    private var imuOn = false
     private lazy var plats: PassPlats = {
         let p = PassPlats()
         p.onPoint = { [weak self] (punkt: TrackPoint) -> Void in self?.receivedPoint(punkt) }
@@ -140,41 +138,6 @@ final class PassController: ObservableObject {
     func setKind(_ kind: PassKind) {
         state.setKind(kind)
         persistCurrent()
-    }
-
-    /// BESLUT B150. Passets märkning: typ eller egna ord, och anteckningen. Sparas direkt, som typen.
-    func setLabel(_ label: PassLabel) {
-        state.setLabel(label)
-        persistCurrent()
-    }
-
-    /// BESLUT B150 · METOD M85. Ändrar ett sparat pass: märkningen, och start och slut. Proven utanför det nya fönstret
-    /// tas bort och de minuter som saknas fylls ur bandets historik (på filkön); talen räknas om ur proven. Ett
-    /// förslags ursprung (`suggested`) står kvar som det var.
-    func ändra(_ pass: Pass, label: PassLabel, start: Date, stopp: Date) {
-        guard let i = saved.firstIndex(where: { $0.id == pass.id }) else { return }
-        var p: Pass = saved[i]
-        PassEdit.apply(label, to: &p)
-        if p.stop != nil { p = PassEdit.retimed(p, start: start, stop: stopp) }
-        guard p != saved[i] else { return }
-        var lista: [Pass] = saved
-        lista[i] = p
-        saved = Self.newestFirst(lista)
-        persist(p)
-        historikSedd[p.id] = nil
-        let ändrat: Pass = p
-        ioQueue.async { [weak self] in
-            let läst = PassHistorik.läs(ändrat, now: Date(), sedda: [:])
-            let fyllt: Pass = PassHistory.fill(ändrat, readings: läst.poster, through: läst.nått)
-            DispatchQueue.main.async {
-                guard let self = self, let j = self.saved.firstIndex(where: { $0.id == ändrat.id }),
-                      self.saved[j] == ändrat, fyllt != ändrat else { return }
-                // Bara om passet inte ändrats igen medan historiken lästes.
-                self.saved[j] = fyllt
-                self.historikSedd[fyllt.id] = läst.sedda
-                self.persist(fyllt)
-            }
-        }
     }
 
     /// "Klar": avslutar efterperioden och sparar direkt.
@@ -320,10 +283,13 @@ final class PassController: ObservableObject {
 
     // MARK: Förslag (BESLUT B121, METOD M69)
 
-    /// Letar pass i bandets historik för de två senaste dygnen och visar dem som förslag, med knuten K3 (BESLUT B151):
-    /// pulsen mot dygnets egen nivå och ihållande rörelse, så varken vilopuls eller maxpuls behövs (B121 krävde dem).
-    /// Läsningen görs på filkön; ett förslag som tagits bort kommer inte tillbaka.
-    func hittaFörslag() {
+    /// Letar pass i bandets historik för de två senaste dygnen och visar dem som förslag. Utan vilopuls eller maxpuls
+    /// inga förslag. Läsningen görs på filkön; ett förslag som tagits bort kommer inte tillbaka.
+    func hittaFörslag(vilopuls: Double?, maxpuls: Double?) {
+        guard let vila = vilopuls, let max = maxpuls else {
+            förslag = []
+            return
+        }
         guard !förslagPågår else { return }
         förslagPågår = true
         var passen: [Pass] = saved
@@ -331,8 +297,8 @@ final class PassController: ObservableObject {
         let lager: PassSuggestions.Store = förslagslager
         ioQueue.async { [weak self] in
             let läst = PassForslag.sekunder(now: Date())
-            let hittade: [PassDetection.Candidate] = PassSuggestions.knotSuggestions(
-                seconds: läst.sekunder, passes: passen, store: lager)
+            let hittade: [PassDetection.Candidate] = PassSuggestions.suggestions(
+                seconds: läst.sekunder, restingPulse: vila, maxPulse: max, passes: passen, store: lager)
             let nyast: [PassDetection.Candidate] = hittade.sorted {
                 (a: PassDetection.Candidate, b: PassDetection.Candidate) -> Bool in a.startMinute > b.startMinute
             }
@@ -345,27 +311,9 @@ final class PassController: ObservableObject {
         }
     }
 
-    /// BESLUT B150. Bandets poster för ett förslag med valda tider: fönstret och efterperioden, med en minut på var sida.
-    private func posterFör(start: Date, stopp: Date) -> [PassHistory.Reading] {
-        let från: Int = Int(start.timeIntervalSince1970) - 60
-        let till: Int = Int(stopp.timeIntervalSince1970 + PassRules.afterSeconds) + 60
-        guard från <= till else { return [] }
-        return förslagsposter.filter { (r: PassHistory.Reading) -> Bool in (från...till).contains(r.time) }
-    }
-
-    /// BESLUT B150. Förslaget som pass med valda tider och märkning, för talen i bladet; `nil` utan bandets poster.
-    func förhandsvisa(_ f: PassDetection.Candidate, val: PassForslagsval) -> Pass? {
-        guard !förslagsposter.isEmpty else { return nil }
-        return PassSuggestions.pass(from: f, kind: val.label.kind, readings: posterFör(start: val.start, stopp: val.stopp),
-                                    label: val.label, start: val.start, stop: val.stopp)
-    }
-
-    /// Lägger ett förslag till som ett pass med vald märkning och valda tider, sparat som ett färdigt pass med förslaget
-    /// som det var (`suggested`, BESLUT B150), och tar bort förslaget ur listan.
-    func läggTill(_ f: PassDetection.Candidate, val: PassForslagsval) {
-        let p: Pass = PassSuggestions.pass(from: f, kind: val.label.kind,
-                                           readings: posterFör(start: val.start, stopp: val.stopp),
-                                           label: val.label, start: val.start, stop: val.stopp)
+    /// Lägger ett förslag till som ett pass av typen `typ`, sparat som ett färdigt pass, och tar bort förslaget ur listan.
+    func läggTill(_ f: PassDetection.Candidate, typ: PassKind) {
+        let p: Pass = PassSuggestions.pass(from: f, kind: typ, readings: förslagsposter)
         persist(p)
         saved = Self.newestFirst(saved.filter { $0.id != p.id } + [p])
         förslag.removeAll { $0 == f }
@@ -401,7 +349,6 @@ final class PassController: ObservableObject {
             endMeasuring()
         }
         syncPlats()
-        syncImu()
         syncMetronom()
         UIApplication.shared.isIdleTimerDisabled = state.wantsPulse
     }
@@ -416,19 +363,6 @@ final class PassController: ObservableObject {
         } else if !ska, platsOn {
             platsOn = false
             plats.stop()
-        }
-    }
-
-    /// BESLUT B147 · METOD M84. Rörelsen i 100 Hz på från Start till Stopp, för alla slag av pass; av i efterperioden,
-    /// vid klar och när ett pass som tas upp igen redan är i efterperioden (`adopt` → `changed`).
-    private func syncImu() {
-        let ska: Bool = state.phase == .running
-        if ska, !imuOn {
-            imuOn = true
-            Recorder.shared.startPassImu()
-        } else if !ska, imuOn {
-            imuOn = false
-            Recorder.shared.stopPassImu()
         }
     }
 

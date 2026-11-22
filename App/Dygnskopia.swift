@@ -1,8 +1,6 @@
 import Foundation
 import UIKit
 import Coach
-import Pass
-import WhoopFrames
 
 /// BESLUT B143 · METOD M82
 /// Utvecklingskopian: när telefonen är kopplad till coachen (B127) laddar appen av sig själv upp varje färdigt dygns
@@ -14,10 +12,6 @@ import WhoopFrames
 /// - **Vad:** bara arkiven, som byte exakt som de ligger på telefonen. Aldrig ljud, spår eller dagbok.
 /// - **Fel:** ett misslyckat anrop stoppar körningen; nästa försök tidigast efter `CoachRules.retrySeconds`.
 ///   `for-gammal` (hinken full, dygnet äldst) räknas som klart. `okand` kopplar från, som hos coachen.
-/// - **Passens rörelse (BESLUT B148, METOD M84):** dygnsarkivet laddas upp utan rörelsen i 100 Hz
-///   (`PassMotion.withoutMotion`). Rörelsen går i stället per pass, som `<yyyy-MM-dd-HHmmss>.rorelse`, till den egna
-///   hinken `rorelse` (`CoachCall.motionCopy`): ramarna från en minut före start till en minut efter stopp, ur
-///   dygnens filer (`PassMotion.extract`). Ett pass utan rörelse markeras och läses inte om.
 @MainActor
 final class DygnskopiaModell: ObservableObject {
     static let shared = DygnskopiaModell()
@@ -31,10 +25,6 @@ final class DygnskopiaModell: ObservableObject {
         var dygn: Int? = nil
         var megabyte: Double? = nil
         var tak: Double? = nil
-        /// BESLUT B148. Pass i hinken `rorelse`, megabyte i den och dess tak.
-        var pass: Int? = nil
-        var passMegabyte: Double? = nil
-        var passTak: Double? = nil
         /// När ett dygn senast kom fram.
         var senast: Date? = nil
         var fel: String? = nil
@@ -49,11 +39,6 @@ final class DygnskopiaModell: ObservableObject {
         var megabyte: Double?
         var tak: Double?
         var senast: Date?
-        /// BESLUT B148. Passen vars rörelse skickats (eller som saknar rörelse), och hinkens läge.
-        var rorelse = DayCopyLedger()
-        var pass: Int?
-        var passMegabyte: Double?
-        var passTak: Double?
 
         init() {}
 
@@ -64,10 +49,6 @@ final class DygnskopiaModell: ObservableObject {
             megabyte = try c.decodeIfPresent(Double.self, forKey: .megabyte)
             tak = try c.decodeIfPresent(Double.self, forKey: .tak)
             senast = try c.decodeIfPresent(Date.self, forKey: .senast)
-            rorelse = try c.decodeIfPresent(DayCopyLedger.self, forKey: .rorelse) ?? DayCopyLedger()
-            pass = try c.decodeIfPresent(Int.self, forKey: .pass)
-            passMegabyte = try c.decodeIfPresent(Double.self, forKey: .passMegabyte)
-            passTak = try c.decodeIfPresent(Double.self, forKey: .passTak)
         }
     }
 
@@ -105,9 +86,6 @@ final class DygnskopiaModell: ObservableObject {
         läge.megabyte = fil.megabyte
         läge.tak = fil.tak
         läge.senast = fil.senast
-        läge.pass = fil.pass
-        läge.passMegabyte = fil.passMegabyte
-        läge.passTak = fil.passTak
         läge.kopplad = CoachNyckelring.läs() != nil
     }
 
@@ -156,7 +134,7 @@ final class DygnskopiaModell: ObservableObject {
                     () -> (data: Data, avtryck: String)? in
                     guard let d = try? Data(contentsOf: NightFiles.archive("dygn-" + dag), options: .mappedIfSafe)
                     else { return nil }
-                    return (Self.utanRörelse(d), DayCopyLedger.fingerprint(d))
+                    return (d, DayCopyLedger.fingerprint(d))
                 }.value
                 // Ett arkiv som försvunnit eller är för stort eller tomt hoppas över: det finns inget att skicka.
                 guard let läst, let anrop = CoachCall.dayCopy(config: c, day: dag, archive: läst.data) else { continue }
@@ -183,86 +161,11 @@ final class DygnskopiaModell: ObservableObject {
                 }
                 if fel != nil { break }
             }
-            if fel == nil, self.läge.på { fel = await self.synkaRörelsen(c) }
             self.läge.kopplad = CoachNyckelring.läs() != nil
             self.läge.fel = fel
             self.läge.arbetar = false
             self.slutaBakgrund()
         }
-    }
-
-    /// BESLUT B148. Arkivet som det skickas: utan rörelsen i 100 Hz. Ett arkiv utan rörelse, eller ett som inte går
-    /// att läsa (mottagaren tar då emot det som förut), skickas som det ligger.
-    nonisolated private static func utanRörelse(_ data: Data) -> Data {
-        guard let a = try? DayArchive.decode(data), PassMotion.hasMotion(a) else { return data }
-        return PassMotion.withoutMotion(a).encode()
-    }
-
-    /// Ett pass att ladda upp rörelsen för: namnet (`PassFile.stamp`), start och stopp.
-    private struct RörelsePass: Sendable {
-        var namn: String
-        var start: Date
-        var stopp: Date
-    }
-
-    /// BESLUT B148 · METOD M84. Passens rörelse, nyast först: färdiga pass från de senaste `ArchiveRule.keepRawDays`
-    /// dygnen som inte skickats. Svarar med felet i ord, eller `nil`.
-    private func synkaRörelsen(_ c: CoachConfig) async -> String? {
-        let nu = Date()
-        let gräns: Date = nu.addingTimeInterval(-Double(ArchiveRule.keepRawDays) * 86_400)
-        var lista: [RörelsePass] = []
-        for p in PassController.shared.saved {
-            guard let stopp = p.stop, p.start >= gräns, stopp.addingTimeInterval(PassMotion.margin + 60) < nu else {
-                continue
-            }
-            let namn: String = PassFile.stamp(start: p.start, timeZone: .current)
-            if fil.rorelse.sent[namn] == nil { lista.append(RörelsePass(namn: namn, start: p.start, stopp: stopp)) }
-        }
-        lista.sort { (a: RörelsePass, b: RörelsePass) -> Bool in a.start > b.start }
-        for p in lista {
-            guard läge.på else { return nil }
-            let data: Data? = await Task.detached(priority: .utility) { () -> Data? in
-                Self.rörelsefil(start: p.start, stopp: p.stopp)
-            }.value
-            // Inget att skicka: ett pass utan ström (före B147, eller bandet hördes inte), eller en för stor fil.
-            guard let data, let anrop = CoachCall.motionCopy(config: c, pass: p.namn, file: data) else {
-                fil.rorelse.mark(day: p.namn, fingerprint: data == nil ? "tom" : "stor")
-                spara()
-                continue
-            }
-            let svar: CoachReply = await CoachSändare.skicka(anrop)
-            switch svar {
-            case .copied(let antal, let mb, let tak):
-                fil.rorelse.mark(day: p.namn, fingerprint: DayCopyLedger.fingerprint(data))
-                fil.pass = antal
-                fil.passMegabyte = mb
-                fil.passTak = tak
-                spara()
-                läge.pass = antal
-                läge.passMegabyte = mb
-                läge.passTak = tak
-            case .refused("for-gammal"):
-                fil.rorelse.mark(day: p.namn, fingerprint: "for-gammal")
-                spara()
-            default:
-                if svar.isUnknownDevice { CoachModell.shared.kopplaFrån() }
-                return Self.text(svar)
-            }
-        }
-        return nil
-    }
-
-    /// BESLUT B148 · METOD M84. Passets rörelsefil ur dygnens filer (rådygnet, eller arkivet när rådygnet är borta).
-    /// Körs utanför huvudkön: ett rådygn är tiotals MB.
-    nonisolated private static func rörelsefil(start: Date, stopp: Date) -> Data? {
-        let zon: Int = TimeZone.current.secondsFromGMT(for: start)
-        var dygn: [DayArchive] = []
-        for stam in DayLog.stems(touching: start.addingTimeInterval(-PassMotion.margin),
-                                 to: stopp.addingTimeInterval(PassMotion.margin), utcOffsetSeconds: zon) {
-            guard let dag = DayLog.day(ofStem: stam), let d = NightFiles.dayData(stam) else { continue }
-            dygn.append(DayArchive.build(day: dag, sidecar: d.pulse, frames: d.frames))
-        }
-        return PassMotion.extract(dygn, start: start, stop: stopp)?.encode()
     }
 
     /// Dygnens arkiv och deras fingeravtryck, nyast först. Körs utanför huvudkön: ett arkiv är ett par MB.

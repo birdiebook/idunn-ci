@@ -23,11 +23,6 @@ import HeartRate
 ///   och `imu igen` vid nästa ram. Ingen ny start skickas: bandet tog upp
 ///   strömmen själv efter en återanslutning 2026-10-14.
 ///
-/// - **Passet (BESLUT B147, METOD M84):** ett pass äger strömmen (`Owner.pass`) från Start till Stopp, med
-///   `passTimeout` i stället för `hardTimeout`. Är länken uppe men rörelsen tyst i `restartAfter` (också direkt
-///   efter starten) skickas 81 + 106 en gång till, en gång per anslutning. Dör appen och passet tas upp igen,
-///   tar passet över strömmen i stället för att stoppet efter omstarten skickas (`start(now:owner:)`).
-///
 /// Maskinen räknar bara ramar, byte och svar — aldrig ett värde ur rörelsen
 /// (BESLUT B3). Ramarna sparas råa i dygnsfilen som alla andra notiser.
 public struct ImuControl: Sendable {
@@ -53,24 +48,12 @@ public struct ImuControl: Sendable {
         /// METOD M43. **antagande**: tre buffertar (en i sekunden, mätt
         /// 2026-10-14) utan rörelse med länken uppe räknas som tystnad.
         public var silenceLimit: TimeInterval = 3
-        /// BESLUT B147 · METOD M84. **antagande**: tidsgränsen när ett pass äger strömmen (passet avslutas efter
-        /// 4 timmar utan prov, M47).
-        public var passTimeout: TimeInterval = 3 * 3600
-        /// BESLUT B147 · METOD M84. **antagande**: så länge får rörelsen vara tyst med länken uppe under ett pass
-        /// innan 81 + 106 skickas igen (svaren kom inom 0,6 s, M43).
-        public var restartAfter: TimeInterval = 10
         public init() {}
     }
 
     /// BESLUT B53. Märkena för provets delar (sittningskortet i PLAN.md). Ett
     /// märke gäller till nästa märke; `tools/imu_analys.py` läser samma ord.
     public static let markerLabels = ["still", "rotera x", "rotera y", "rotera z", "sving", "chip", "putt", "paus"]
-
-    /// BESLUT B147. Vem som startade strömmen: IMU-provet på Bandkontroll eller ett pass.
-    public enum Owner: String, Equatable, Sendable {
-        case prov
-        case pass
-    }
 
     public enum StopReason: String, Equatable, Sendable {
         /// användaren stoppade.
@@ -87,8 +70,6 @@ public struct ImuControl: Sendable {
         case restart = "omstart"
         /// Appen avslutas.
         case terminate = "avslut"
-        /// BESLUT B147. Passet stoppades (eller tog slut).
-        case pass = "pass"
     }
 
     public enum Phase: Equatable, Sendable {
@@ -157,8 +138,6 @@ public struct ImuControl: Sendable {
         public var responses: [Response] = []
         /// METOD M43. Gånger rörelsen tystnat med länken uppe (`watch`).
         public var silences = 0
-        /// BESLUT B147. Gånger 81 + 106 skickats igen under ett pass.
-        public var restarts = 0
         public init() {}
 
         public var imuFrames: Int { r21Frames + stream51Frames + stream52Frames }
@@ -169,8 +148,6 @@ public struct ImuControl: Sendable {
     }
 
     public private(set) var phase: Phase = .off
-    /// BESLUT B147. Vem som äger strömmen just nu (eller ägde den senast).
-    public private(set) var owner: Owner = .prov
     public private(set) var progress = Progress()
     /// Gånger skyddet skickat stoppet sedan appen startade.
     public private(set) var failsafeStops = 0
@@ -188,9 +165,6 @@ public struct ImuControl: Sendable {
     /// om `imu tyst` redan skrivits för den här tystnaden.
     private var watchFrom: Date?
     private var silent = false
-    /// BESLUT B147. 81 + 106 har skickats igen i den här anslutningen, och en sådan ny start pågår.
-    private var restartedThisLink = false
-    private var restarting = false
 
     /// `stopAtStart`: appen dog under ett prov (sparat i appen). Stoppet läggs
     /// i kön direkt och skrivs när bandet går att skriva till.
@@ -211,26 +185,17 @@ public struct ImuControl: Sendable {
     /// Något väntar på att skrivas: appen ser till att skrivkarakteristiken finns.
     public var wantsWrite: Bool { !queue.isEmpty }
 
-    /// Tidsgränsen för den som äger strömmen.
-    public var timeout: TimeInterval { owner == .pass ? config.passTimeout : config.hardTimeout }
-
-    /// Sekunder kvar till tidsgränsen, medan provet är på.
+    /// Sekunder kvar till `hardTimeout`, medan provet är på.
     public func remaining(now: Date) -> TimeInterval? {
         guard phase == .starting || phase == .on, let s = progress.startedAt else { return nil }
-        return max(0, timeout - now.timeIntervalSince(s))
+        return max(0, config.hardTimeout - now.timeIntervalSince(s))
     }
 
     // MARK: Indata
 
-    /// användaren knapptryck (provet) eller passets Start. Bara från av, utom att ett pass tar över en ström vars
-    /// stopp efter en omstart ännu inte skrivits (BESLUT B147): då skickas starten i stället för stoppet.
-    public mutating func start(now: Date, owner: Owner = .prov) -> [Action] {
-        let tarÖver = owner == .pass && phase == .stopping(.restart) && queue == [.stopRaw, .imuOff]
-            && stopAttempts == 0
-        guard tarÖver || (phase == .off && queue.isEmpty) else { return [] }
-        self.owner = owner
-        restartedThisLink = false
-        restarting = false
+    /// användaren knapptryck. Bara från av.
+    public mutating func start(now: Date) -> [Action] {
+        guard phase == .off, queue.isEmpty else { return [] }
         progress = Progress()
         progress.startedAt = now
         phase = .starting
@@ -239,7 +204,7 @@ public struct ImuControl: Sendable {
         stopAttempts = 0
         queue = [.startRaw, .imuOn]
         nextWriteAt = max(nextWriteAt, now)
-        return [.mark(owner == .pass ? "imu-start pass" : "imu-start")]
+        return [.mark("imu-start")]
     }
 
     /// Stoppar provet (eller en oväntad ström). Ett stopp som redan pågår
@@ -252,7 +217,6 @@ public struct ImuControl: Sendable {
         stopAttempts = 0
         watchFrom = nil
         silent = false
-        restarting = false
         queue = [.stopRaw, .imuOff]
         nextWriteAt = max(nextWriteAt, now)
         return [.mark("imu-stopp " + reason.rawValue)]
@@ -265,7 +229,7 @@ public struct ImuControl: Sendable {
         var ut: [Action] = []
         expireResponses(now: now)
         if phase == .starting || phase == .on, let s = progress.startedAt,
-           now.timeIntervalSince(s) >= timeout {
+           now.timeIntervalSince(s) >= config.hardTimeout {
             ut += stop(now: now, reason: .timeout)
         }
         guard canWrite, !queue.isEmpty, now >= nextWriteAt else { return ut }
@@ -279,7 +243,6 @@ public struct ImuControl: Sendable {
         if queue.isEmpty {
             switch phase {
             case .starting: phase = .on
-            case .on: restarting = false
             case .stopping: finishStop(now: now)
             default: break
             }
@@ -330,26 +293,16 @@ public struct ImuControl: Sendable {
         guard phase == .on, linkUp else {
             watchFrom = nil
             silent = false
-            if !linkUp { restartedThisLink = false }
             return []
         }
         let från = watchFrom ?? now
         watchFrom = från
+        guard !silent else { return [] }
         let senast = max(från, progress.lastImuAt ?? .distantPast)
-        var ut: [Action] = []
-        // BESLUT B147. Ett pass: rörelsen tyst med länken uppe, en ny start per anslutning.
-        if owner == .pass, !restartedThisLink, queue.isEmpty, now.timeIntervalSince(senast) > config.restartAfter {
-            restartedThisLink = true
-            restarting = true
-            progress.restarts += 1
-            queue = [.startRaw, .imuOn]
-            nextWriteAt = max(nextWriteAt, now)
-            ut.append(.mark("imu-omstart"))
-        }
-        guard !silent, now.timeIntervalSince(senast) > config.silenceLimit else { return ut }
+        guard now.timeIntervalSince(senast) > config.silenceLimit else { return [] }
         silent = true
         progress.silences += 1
-        return [.link(.imuSilent)] + ut
+        return [.link(.imuSilent)]
     }
 
     /// Den senaste skrivningen gick inte fram (`BandSender` sade nej, eller
@@ -358,12 +311,6 @@ public struct ImuControl: Sendable {
     public mutating func writeFailed(now: Date) -> [Action] {
         switch phase {
         case .starting, .on:
-            // BESLUT B147. En ny start under ett pass som inte gick att skriva: strömmen får gå som den går.
-            if restarting {
-                restarting = false
-                queue = []
-                return []
-            }
             if lastStep == .startRaw || lastStep == .imuOn {
                 return stop(now: now, reason: .writeFailed)
             }

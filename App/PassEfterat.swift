@@ -25,6 +25,7 @@ struct PassKortRubrik: View {
 /// En kurva över passets tid i Nattens form (B95–B99): en blågrå linje med en yta under som tonar ut, skalan på jämna
 /// tal med linjer ända ut och talen till höger, tiden före stopp i full ton och efter stopp uttonad, en streckad linje
 /// vid Start och vid Stopp med klockslaget under i textens färg. Pulslinjen före stopp kan färgas efter zonen den går i.
+/// Med `före` visas också tiden före Start, uttonad som tiden efter stopp, så att passet står i mitten (B146).
 /// Ett håll på kurvan sätter en punkt som följer fingret, med värdet och tiden i hörnet och ett knäpp när punkten kommer;
 /// den försvinner när fingret släpps. Färre än två punkter ger en text.
 struct PassKurva: View {
@@ -41,6 +42,8 @@ struct PassKurva: View {
     var start: Date? = nil
     /// Sekunder från Start till Stopp; delen efter ritas uttonad. nil = inget stopp på kurvan.
     var stopp: TimeInterval? = nil
+    /// BESLUT B146. Sekunder före Start som x-axeln börjar på; punkter med negativ tid ritas uttonade. 0 = börjar vid Start.
+    var före: TimeInterval = 0
     /// Större lucka än så här (sekunder) mellan två punkter bryter linjen; nil = bryts aldrig.
     var lucka: TimeInterval? = nil
     /// true = lägre värde ritas högre upp (tempo).
@@ -60,7 +63,7 @@ struct PassKurva: View {
 
     /// Uttrycklig, för `@State private var markerad` gör den automatiska initieraren privat (se `Pekyta`).
     init(punkter: [PassSeries.Point], längd: TimeInterval, start: Date? = nil, stopp: TimeInterval? = nil,
-         lucka: TimeInterval? = nil, omvänd: Bool = false, band: [Band] = [],
+         före: TimeInterval = 0, lucka: TimeInterval? = nil, omvänd: Bool = false, band: [Band] = [],
          stegval: [Double]? = nil, text: @escaping (Double) -> String,
          vald: @escaping (Double) -> (tal: String, enhet: String) = { (v: Double) in (String(Int(v.rounded())), "") },
          etikett: String = "Kurva") {
@@ -68,6 +71,7 @@ struct PassKurva: View {
         self.längd = längd
         self.start = start
         self.stopp = stopp
+        self.före = max(0, före)
         self.lucka = lucka
         self.omvänd = omvänd
         self.band = band
@@ -88,6 +92,8 @@ struct PassKurva: View {
     /// Tidsaxelns nollpunkt i sekunder sedan 1970 (passets start, eller 0 utan start).
     private var t0: TimeInterval { start?.timeIntervalSince1970 ?? 0 }
     private var xMax: TimeInterval { max(1, längd, punkter.last?.seconds ?? 0) }
+    /// BESLUT B146. X-axelns vänstra kant: `före` sekunder före Start.
+    private var xMin: TimeInterval { -före }
 
     /// Skalan: jämna steg (1, 2 eller 5 gånger en tiopotens) så att det blir fyra till sju linjer.
     /// Med `stegval` (t.ex. tempots 15, 30, 60 s) väljs det minsta av dem som räcker.
@@ -129,7 +135,7 @@ struct PassKurva: View {
             .overlay(alignment: hörn(v)) {
                 if let v = v { hörnetikett(v) }
             }
-            .pekMarkering($markerad, från: t0, till: t0 + xMax,
+            .pekMarkering($markerad, från: t0 + xMin, till: t0 + xMax,
                           vänster: Self.kant.vänster, höger: Self.kant.höger)
             // BESLUT B99. Ett knäpp när punkten kommer, inget medan fingret drar.
             .sensoryFeedback(.impact(weight: .light), trigger: markerad != nil) { (före: Bool, nu: Bool) -> Bool in
@@ -143,7 +149,7 @@ struct PassKurva: View {
     /// BESLUT B98. Talet uppe till vänster, och till höger när punkten ligger i kurvans vänstra del.
     private func hörn(_ v: PassSeries.Point?) -> Alignment {
         guard let v = v else { return .topLeading }
-        return v.seconds / xMax < 0.4 ? .topTrailing : .topLeading
+        return (v.seconds - xMin) / (xMax - xMin) < 0.4 ? .topTrailing : .topLeading
     }
 
     private func tidstext(_ sekunder: TimeInterval) -> String {
@@ -181,7 +187,8 @@ struct PassKurva: View {
         let vä: CGFloat = Self.kant.vänster
         let bredd: CGFloat = max(1, W - vä - Self.kant.höger)
         let xMax: TimeInterval = self.xMax
-        let x = { (s: TimeInterval) -> CGFloat in vä + CGFloat(min(1, max(0, s / xMax))) * bredd }
+        let xMin: TimeInterval = self.xMin
+        let x = { (s: TimeInterval) -> CGFloat in vä + CGFloat(min(1, max(0, (s - xMin) / (xMax - xMin)))) * bredd }
 
         let värden: [Double] = punkter.map { (q: PassSeries.Point) -> Double in q.value }
         let sk: (lo: Double, hi: Double, steg: Double) = Self.skala(värden.min() ?? 0, värden.max() ?? 0, stegval: stegval)
@@ -218,45 +225,59 @@ struct PassKurva: View {
             ctx.fill(Path(ellipseIn: CGRect(x: px - 2.5, y: prick - 2.5, width: 5, height: 5)), with: .color(Tema.text))
             ctx.etikett(tidstext(t), CGPoint(x: px, y: H - 8), storlek: 12, färg: Tema.text, vikt: .semibold)
         }
-        // Slutet av kurvan, dämpat, när det inte krockar med Stopp.
-        let slutX: CGFloat = x(xMax)
-        if ändar.allSatisfy({ (t: TimeInterval) -> Bool in abs(x(t) - slutX) >= 48 }) {
-            ctx.etikett(tidstext(xMax), CGPoint(x: slutX, y: H - 8), storlek: 10, färg: Tema.dim)
+        // Början och slutet av kurvan, dämpade, när de inte krockar med Start eller Stopp.
+        var kanter: [TimeInterval] = [xMax]
+        if xMin < 0 { kanter.insert(xMin, at: 0) }
+        for k in kanter {
+            let kx: CGFloat = x(k)
+            if ändar.allSatisfy({ (t: TimeInterval) -> Bool in abs(x(t) - kx) >= 48 }) {
+                ctx.etikett(tidstext(k), CGPoint(x: kx, y: H - 8), storlek: 10, färg: Tema.dim)
+            }
         }
 
-        // Linjen i stycken: en lucka bryter den, och stopp delar den i före och efter.
+        // Linjen i stycken: en lucka bryter den, och Start och Stopp delar den i tre delar: innan Start (B146), passet
+        // och efter stopp. Delarna utanför passet ritas uttonade.
         var före: [[CGPoint]] = []
         var efter: [[CGPoint]] = []
         var nu: [CGPoint] = []
-        var nuEfter: Bool = false
+        var nuDel: Int = 1
         var förra: PassSeries.Point? = nil
+        func del(_ s: TimeInterval) -> Int {
+            if s < 0 { return 0 }
+            return (stopp.map { (st: TimeInterval) -> Bool in s > st } ?? false) ? 2 : 1
+        }
+        func lägg(_ stycke: [CGPoint], _ d: Int) {
+            guard stycke.count > 0 else { return }
+            if d == 1 { före.append(stycke) } else { efter.append(stycke) }
+        }
         for q in punkter {
-            let ärEfter: Bool = stopp.map { (s: TimeInterval) -> Bool in q.seconds > s } ?? false
+            let d: Int = del(q.seconds)
             let pt: CGPoint = CGPoint(x: x(q.seconds), y: y(q.value))
             let bryt: Bool = förra.map { (f: PassSeries.Point) -> Bool in
                 lucka.map { (l: TimeInterval) -> Bool in q.seconds - f.seconds > l } ?? false
             } ?? true
-            if bryt || ärEfter != nuEfter {
-                if nu.count > 0 { if nuEfter { efter.append(nu) } else { före.append(nu) } }
-                // Före och efter stopp hänger ihop i en punkt, utan lucka.
-                nu = (!bryt && ärEfter != nuEfter) ? [nu.last ?? pt, pt] : [pt]
-                nuEfter = ärEfter
+            if bryt || d != nuDel {
+                lägg(nu, nuDel)
+                // Delarna hänger ihop i en punkt vid Start och Stopp, utan lucka.
+                nu = (!bryt && d != nuDel) ? [nu.last ?? pt, pt] : [pt]
+                nuDel = d
             } else {
                 nu.append(pt)
             }
             förra = q
         }
-        if nu.count > 0 { if nuEfter { efter.append(nu) } else { före.append(nu) } }
+        lägg(nu, nuDel)
 
         // BESLUT B144. Linjen före stopp i zonens färg där den går: en lodrät toning med skarpa skiften vid zonernas
-        // gränser, så att varje bit av linjen får färgen för sin höjd. Under zon 1 är den mörkgrå (B145), utan zoner blågrå.
+        // gränser, så att varje bit av linjen får färgen för sin höjd. Under zon 1 är den blågrå som utan zoner (B146:
+        // vyn skickar bara den valda zonens färg, de andra som blågrå).
         let zonfärg: GraphicsContext.Shading? = {
             guard !band.isEmpty else { return nil }
             let span: CGFloat = max(1, bas - top)
             func andel(_ v: Double) -> CGFloat { min(1, max(0, (y(v) - top) / span)) }
             // Varje nivå har sin färg mellan sin undre gräns och nästa nivås.
             var stopp: [Gradient.Stop] = []
-            var nivåer: [(från: Double, färg: Color)] = [(-Double.infinity, Color(rgb: 0x5A646B))]
+            var nivåer: [(från: Double, färg: Color)] = [(-Double.infinity, Tema.pulse)]
             nivåer += band.map { (b: Band) -> (från: Double, färg: Color) in (b.från, b.färg) }
             // Uppifrån och ner, så att platserna stiger och varje skifte blir skarpt.
             for i in nivåer.indices.reversed() {
@@ -368,100 +389,88 @@ struct PassUteRutor: View {
     }
 }
 
-/// BESLUT B138. Tid per pulszon: en liggande remsa delad efter tiden i zon 1–5 och en rad per zon med tid.
-/// Utan tid i någon zon ritas inget.
+/// BESLUT B138 · BESLUT B148. Tid per pulszon: en rad per zon, Zon 5 överst som i kurvan (hög puls högt upp), med en
+/// stapel i zonens färg vars längd är tiden i zonen mot den största zonen, och tiden och andelen av passet till höger.
+/// Alla fem zoner står alltid på sin plats, också utan tid. Utan tid i någon zon ritas inget. En rad trycks för att
+/// färga zonen i kurvan, en gång till för att släppa (B146).
 struct PassZonKort: View {
     let zoner: [PassZones.Share]
+    /// BESLUT B146. Den valda zonen, som kurvan färgar; nil = ingen.
+    var vald: Int? = nil
+    /// BESLUT B146. En rad trycktes: zonens nummer.
+    var välj: (Int) -> Void = { (_: Int) in }
 
-    private var med: [PassZones.Share] {
-        zoner.filter { (z: PassZones.Share) -> Bool in z.zone >= 1 && z.seconds > 0 }
+    private func sekunder(_ zon: Int) -> TimeInterval {
+        zoner.first { (z: PassZones.Share) -> Bool in z.zone == zon }?.seconds ?? 0
+    }
+
+    /// BESLUT B148. Andelen av passet: tiden i zonen mot all uppmätt tid, också den under zon 1.
+    private var summa: TimeInterval {
+        zoner.reduce(0) { (s: TimeInterval, z: PassZones.Share) -> TimeInterval in s + z.seconds }
     }
 
     var body: some View {
-        if !med.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+        let störst: TimeInterval = (1...5).map(sekunder).max() ?? 0
+        if störst > 0 {
+            VStack(alignment: .leading, spacing: 10) {
                 PassKortRubrik(text: "Tid per pulszon")
-                ZonRemsa(zoner: zoner, höjd: 12)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                VStack(spacing: 10) {
-                    ForEach(med, id: \.zone) { (z: PassZones.Share) in
-                        HStack(spacing: 8) {
-                            Circle().fill(PassZonTrappa.color(z.zone)).frame(width: 8, height: 8)
-                            Text(PassZonText.namn(z.zone))
-                                .font(.system(size: 15))
-                                .foregroundStyle(Tema.text)
-                            Spacer(minLength: 8)
-                            Text(PassZonText.tid(z.seconds))
-                                .font(.system(size: 15))
-                                .monospacedDigit()
-                                .foregroundStyle(Tema.text)
-                        }
+                VStack(spacing: 2) {
+                    ForEach([5, 4, 3, 2, 1], id: \.self) { (zon: Int) in
+                        rad(zon, sek: sekunder(zon), störst: störst)
                     }
                 }
+                .padding(.horizontal, -10)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
         }
     }
-}
 
-/// BESLUT B138 · METOD M47. Återhämtningen efter stopp: pulsen vid stopp och efter 1, 2 och 5 minuter, med fallet från
-/// stopp i en värdepille. Fallet har ingen färg: källans gränser används aldrig mot ett pass i appen.
-struct PassEfterStoppKort: View {
-    let pass: Pass
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                PassKortRubrik(text: "Efter stopp")
-                Spacer(minLength: 8)
-                Text("återhämtning").font(.system(size: 12)).foregroundStyle(Tema.dim)
-            }
-            .padding(.bottom, 6)
-            rad("Stopp", bpm: pass.pulseAtStop, fall: nil, först: true)
-            ForEach(pass.recovery, id: \.seconds) { (r: PassRecoveryPoint) in
-                rad(minuter(r.seconds), bpm: r.bpm, fall: r.drop, först: false)
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
-    }
-
-    private func minuter(_ sekunder: Int) -> String {
-        let m: Int = sekunder / 60
-        return m == 1 ? "1 minut" : "\(m) minuter"
-    }
-
-    private func rad(_ namn: String, bpm: Int?, fall: Int?, först: Bool) -> some View {
-        VStack(spacing: 0) {
-            if !först {
-                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-            }
-            HStack(spacing: 8) {
-                Text(namn).font(.system(size: 15)).foregroundStyle(Tema.dim)
-                Spacer(minLength: 8)
-                if let b = bpm {
-                    Text("\(b) slag")
-                        .font(.system(size: 17))
-                        .monospacedDigit()
-                        .foregroundStyle(Tema.text)
-                } else {
-                    Text("–").font(.system(size: 17)).foregroundStyle(Tema.dim)
+    private func rad(_ zon: Int, sek: TimeInterval, störst: TimeInterval) -> some View {
+        let ärVald: Bool = vald == zon
+        let full: Bool = vald == nil || ärVald
+        let procent: Int = summa > 0 ? Int((100 * sek / summa).rounded()) : 0
+        return Button { if sek > 0 { välj(zon) } } label: {
+            HStack(spacing: 10) {
+                Text(PassZonText.namn(zon))
+                    .font(.system(size: 15, weight: ärVald ? .semibold : .regular))
+                    .foregroundStyle(full ? Tema.text : Tema.dim)
+                    .frame(width: 52, alignment: .leading)
+                GeometryReader { (g: GeometryProxy) in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Tema.card2)
+                        if sek > 0 {
+                            Capsule()
+                                .fill(PassZonTrappa.color(zon))
+                                .opacity(full ? 1 : 0.3)
+                                .frame(width: max(6, g.size.width * CGFloat(sek / störst)))
+                        }
+                    }
                 }
-                if let f = fall {
-                    Text(f >= 0 ? "\u{2212}\(f)" : "+\(-f)")
-                        .font(.system(size: 13, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(Tema.text)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 10)
-                        .background(Capsule().fill(Tema.card2))
-                }
+                .frame(height: 10)
+                Text(PassZonText.tid(sek))
+                    .font(.system(size: 15))
+                    .monospacedDigit()
+                    .foregroundStyle(full && sek > 0 ? Tema.text : Tema.dim)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .frame(minWidth: 52, alignment: .trailing)
+                Text("\(procent) %")
+                    .font(.system(size: 13))
+                    .monospacedDigit()
+                    .foregroundStyle(Tema.dim)
+                    .frame(width: 40, alignment: .trailing)
             }
-            .padding(.vertical, 12)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(ärVald ? Tema.card2.opacity(0.6) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(PassZonText.namn(zon) + ", " + PassZonText.tid(sek) + ", \(procent) procent")
+        .accessibilityAddTraits(ärVald ? .isSelected : [])
     }
 }
+

@@ -35,11 +35,9 @@ public enum PassSuggestions {
         return n % 2 == 1 ? s[n / 2] : (s[n / 2 - 1] + s[n / 2]) / 2
     }
 
-    /// METOD M69 · BESLUT B151. Sekunderna som minuter: pulsen är medianen över minutens sekunder med rimlig puls,
-    /// rörelsen medlet av |Δg| mot sekunden närmast före (bara när den ligger precis en sekund före, som METOD M24),
-    /// och hudens temperatur medianen. Andelen sekunder i rörelse (|Δg| minst `PassDetection.movingDelta`) och
-    /// armvinkeln (medianen av sekundernas vinkel mot minutens medelriktning, minst 10 sekunder med tyngdkraft över
-    /// 0,3 g) är det knuten K3 läser. Sekunderna får komma i valfri ordning; samma sekund två gånger räknas en gång.
+    /// METOD M69. Sekunderna som minuter: pulsen är medianen över minutens sekunder med rimlig puls, rörelsen medlet
+    /// av |Δg| mot sekunden närmast före (bara när den ligger precis en sekund före, som METOD M24), och hudens
+    /// temperatur medianen. Sekunderna får komma i valfri ordning; samma sekund två gånger räknas en gång.
     public static func minutes(_ seconds: [Second]) -> [PassDetection.Minute] {
         var perSekund: [Int: Second] = [:]
         for s in seconds { perSekund[s.time] = s }
@@ -47,7 +45,6 @@ public enum PassSuggestions {
         var pulser: [Int: [Double]] = [:]
         var rörelser: [Int: [Double]] = [:]
         var hud: [Int: [Double]] = [:]
-        var riktningar: [Int: [(Double, Double, Double)]] = [:]
         var minuter: Set<Int> = []
         var förra: Second?
         for s in ordnade {
@@ -55,8 +52,6 @@ public enum PassSuggestions {
             minuter.insert(m)
             if bpmRange.contains(s.pulse) { pulser[m, default: []].append(Double(s.pulse)) }
             if let t = s.skinTemperature { hud[m, default: []].append(t) }
-            let längd: Double = (s.x * s.x + s.y * s.y + s.z * s.z).squareRoot()
-            if längd > 0.3 { riktningar[m, default: []].append((s.x / längd, s.y / längd, s.z / längd)) }
             if let f = förra, f.time == s.time - 1 {
                 let dx = s.x - f.x, dy = s.y - f.y, dz = s.z - f.z
                 rörelser[m, default: []].append((dx * dx + dy * dy + dz * dz).squareRoot())
@@ -65,50 +60,10 @@ public enum PassSuggestions {
         }
         return minuter.sorted().map { (m: Int) -> PassDetection.Minute in
             let r = rörelser[m] ?? []
-            let rörliga: Int = r.filter { (d: Double) -> Bool in d >= PassDetection.movingDelta }.count
             return PassDetection.Minute(minute: m, pulse: median(pulser[m] ?? []),
                                         movement: r.isEmpty ? nil : r.reduce(0, +) / Double(r.count),
-                                        skinTemperature: median(hud[m] ?? []),
-                                        movingShare: r.isEmpty ? nil : Double(rörliga) / Double(r.count),
-                                        armAngle: armAngle(riktningar[m] ?? []))
+                                        skinTemperature: median(hud[m] ?? []))
         }
-    }
-
-    /// BESLUT B151. Armvinkeln för en minut: medianen av vinkeln mellan varje sekunds riktning (enhetsvektorer) och
-    /// medelriktningen, i grader. Under tio sekunder, eller utan medelriktning, ger `nil`.
-    static func armAngle(_ riktningar: [(Double, Double, Double)]) -> Double? {
-        guard riktningar.count >= 10 else { return nil }
-        let n = Double(riktningar.count)
-        let mx: Double = riktningar.reduce(0) { (s: Double, v: (Double, Double, Double)) -> Double in s + v.0 } / n
-        let my: Double = riktningar.reduce(0) { (s: Double, v: (Double, Double, Double)) -> Double in s + v.1 } / n
-        let mz: Double = riktningar.reduce(0) { (s: Double, v: (Double, Double, Double)) -> Double in s + v.2 } / n
-        let längd: Double = (mx * mx + my * my + mz * mz).squareRoot()
-        guard längd > 0 else { return nil }
-        let vinklar: [Double] = riktningar.map { (v: (Double, Double, Double)) -> Double in
-            let c: Double = max(-1, min(1, (v.0 * mx + v.1 * my + v.2 * mz) / längd))
-            return acos(c) * (180.0 / Double.pi)
-        }
-        return median(vinklar)
-    }
-
-    /// BESLUT B151. Sekundernas rörelse för typen i knuten K3: tiden och |Δg| mot sekunden precis före (`nil` när
-    /// den inte ligger precis en sekund före). Sorterade på tid; samma sekund två gånger räknas en gång.
-    public static func steps(_ seconds: [Second]) -> [PassDetection.Step] {
-        var perSekund: [Int: Second] = [:]
-        for s in seconds { perSekund[s.time] = s }
-        let ordnade: [Second] = perSekund.values.sorted { (a: Second, b: Second) -> Bool in a.time < b.time }
-        var ut: [PassDetection.Step] = []
-        var förra: Second?
-        for s in ordnade {
-            var d: Double?
-            if let f = förra, f.time == s.time - 1 {
-                let dx = s.x - f.x, dy = s.y - f.y, dz = s.z - f.z
-                d = (dx * dx + dy * dy + dz * dz).squareRoot()
-            }
-            ut.append(PassDetection.Step(time: s.time, delta: d))
-            förra = s
-        }
-        return ut
     }
 
     /// Ett förslag som tagits bort: minuterna det täckte. Ett nytt förslag som rör dem visas inte.
@@ -180,27 +135,13 @@ public enum PassSuggestions {
                                  excluded: excluded(passes: passes, store: store), rules: rules)
     }
 
-    /// BESLUT B151 · METOD M69. Förslagen ur bandets sekunder med knuten K3: det som hittas utanför passen som finns
-    /// och de borttagna. Varken vilopuls eller maxpuls behövs. `timeZone` ger kalenderdygnen som dygnets
-    /// medianpuls räknas över.
-    public static func knotSuggestions(seconds: [Second], passes: [Pass], store: Store,
-                                       timeZone: TimeZone = .current) -> [PassDetection.Candidate] {
-        PassDetection.knotCandidates(minutes(seconds), steps: steps(seconds),
-                                     excluded: excluded(passes: passes, store: store), timeZone: timeZone)
-    }
-
-    /// METOD M69 · METOD M68 · BESLUT B150. Förslaget som ett pass av typen `kind`: Start och Stopp är förslagets (eller
-    /// de tider användaren flyttat dem till), efterperioden är stängd efter `PassRules.afterSeconds`, och pulsen fylls ur
-    /// bandets historik (`PassHistory.fill`), prov för prov med källan historik. Förslaget som det var sparas i
-    /// `suggested`, bredvid det som valdes.
-    public static func pass(from c: PassDetection.Candidate, kind: PassKind?, readings: [PassHistory.Reading],
-                            id: UUID = UUID(), label: PassLabel? = nil, start: Date? = nil, stop: Date? = nil) -> Pass {
-        let början: Date = start ?? c.start
-        let slut: Date = max(början, stop ?? c.end)
-        var p = Pass(id: id, start: början, stop: slut, kind: kind)
-        p.afterEnd = slut.addingTimeInterval(afterSeconds)
-        if let l = label { PassEdit.apply(l, to: &p) }
-        p.suggested = PassOrigin(start: c.start, end: c.end, kind: c.kind)
+    /// METOD M69 · METOD M68. Förslaget som ett pass av typen `kind`: Start och Stopp är förslagets, efterperioden
+    /// är stängd efter `PassRules.afterSeconds`, och pulsen fylls ur bandets historik (`PassHistory.fill`), prov för
+    /// prov med källan historik.
+    public static func pass(from c: PassDetection.Candidate, kind: PassKind, readings: [PassHistory.Reading],
+                            id: UUID = UUID()) -> Pass {
+        var p = Pass(id: id, start: c.start, stop: c.end, kind: kind)
+        p.afterEnd = c.end.addingTimeInterval(afterSeconds)
         return PassHistory.fill(p, readings: readings)
     }
 }

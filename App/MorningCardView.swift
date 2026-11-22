@@ -75,8 +75,10 @@ struct MorningCardView: View {
         let fönsterStart: Date = NightLedger.windowEnd(idag(now: now) - 1, utcOffsetSeconds: zon)
         let till: Date? = recorder.status.lastK18Record.flatMap { (d: Date) -> Date? in d > fönsterStart ? d : nil }
         let hämtat: Date? = recorder.fetchProgress.last.flatMap { (d: Date) -> Date? in d > fönsterStart ? d : nil }
+        // BESLUT B149. Den längsta luckan i natten, så att en natt som saknas kan förklaras.
+        let lucka: ClosedRange<Date>? = Morgonläge.lucka(minuter: recorder.status.k18Minutes, från: fönsterStart, nu: now)
         return Morgonläge.nu(ansluten: recorder.link == .connected, hämtar: recorder.fetching,
-                             räknar: recorder.computingNights, dataTill: till, hämtatTill: hämtat)
+                             räknar: recorder.computingNights, dataTill: till, hämtatTill: hämtat, lucka: lucka)
     }
 
     /// BESLUT B52. Natten på senaste morgonen, om den kommer ur K18 (en gammal inspelning har inga lager
@@ -376,6 +378,37 @@ struct Morgonläge: Equatable {
     var dataTill: Date?
     /// Hur långt hämtningen kommit (nyaste posten den fått hem), medan den pågår.
     var hämtatTill: Date?
+    /// BESLUT B149. Den längsta tiden under natten utan data från bandet, om den är minst `minstaLucka`.
+    var lucka: ClosedRange<Date>? = nil
+
+    /// BESLUT B149. **antagande**. Kortare glapp än så här förklarar inte en natt som saknas.
+    static let minstaLucka: TimeInterval = 20 * 60
+    /// BESLUT B149. Glapp som slutar före så här långt efter dygnsfönstrets början (kl 12 + 6 h = kl 18) räknas inte:
+    /// en eftermiddag utan band förklarar inte natten.
+    static let nattBörjar: TimeInterval = 6 * 3600
+
+    /// BESLUT B149. Den längsta luckan i bandets minuter (`ListenerStatus.k18Minutes`) mellan `från` och `nu`, med
+    /// tiden från sista minuten till nu: minst `minstaLucka` lång och slutar efter `från + nattBörjar`. nil utan
+    /// minuter i fönstret (då finns ingen data alls) eller utan en sådan lucka.
+    static func lucka(minuter: Set<Int>, från: Date, nu: Date) -> ClosedRange<Date>? {
+        let a: Int = Int(från.timeIntervalSince1970 / 60)
+        let b: Int = Int(nu.timeIntervalSince1970 / 60)
+        let m: [Int] = minuter.filter { (x: Int) -> Bool in x >= a && x <= b }.sorted()
+        guard !m.isEmpty else { return nil }
+        let natt: Date = från.addingTimeInterval(nattBörjar)
+        var bäst: ClosedRange<Date>? = nil
+        func pröva(_ start: Date, _ slut: Date) {
+            guard slut.timeIntervalSince(start) >= minstaLucka, slut > natt else { return }
+            let längd: TimeInterval = slut.timeIntervalSince(start)
+            if bäst.map({ (l: ClosedRange<Date>) -> Bool in längd > l.upperBound.timeIntervalSince(l.lowerBound) }) ?? true {
+                bäst = start...slut
+            }
+        }
+        func tid(_ minut: Int) -> Date { Date(timeIntervalSince1970: TimeInterval(minut * 60)) }
+        for (x, y) in zip(m, m.dropFirst()) where y - x > 1 { pröva(tid(x + 1), tid(y)) }
+        if let sista = m.last { pröva(tid(sista + 1), nu) }
+        return bäst
+    }
 
     /// Inget pågår (varken hämtning eller räkning) och ändå finns ingen natt: bandet har inte burits, eller natten
     /// har inte börjat.
@@ -403,7 +436,10 @@ struct Morgonläge: Equatable {
         if räknar == .pågår { return "Natten räknas" }
         if hämtar == .pågår { return "Natten hämtas" }
         if band == .pågår { return "Söker bandet" }
-        return "Ingen natt än"
+        // BESLUT B149.
+        if dataTill == nil { return "Ingen data från bandet" }
+        if lucka != nil { return "Natten saknas" }
+        return "Ingen sömn hittad"
     }
 
     /// BESLUT B136. Kortets text under rubriken, med vanliga ord.
@@ -417,7 +453,15 @@ struct Morgonläge: Equatable {
         if band == .pågår {
             return "Idunn letar efter bandet. Natten hämtas när bandet är i närheten."
         }
-        return "Bandet har ingen natt för idag än. Dra ner för att läsa om."
+        // BESLUT B149. Inget pågår och ingen natt: säg varför, ur det telefonen har.
+        guard dataTill != nil else {
+            return "Telefonen har ingen data från bandet sedan i går eftermiddag, så det finns ingen natt att räkna."
+        }
+        if let l = lucka {
+            return "Bandet var inte anslutet " + Fmt.clock(date: l.lowerBound) + "–" + Fmt.clock(date: l.upperBound)
+                + ", så natten går inte att räkna."
+        }
+        return "Datan från bandet täcker natten, men Idunn hittade ingen sömn i den."
     }
 
     /// BESLUT B136. Den lilla raden under texten: hur långt datan når och hur långt hämtningen kommit.
@@ -428,10 +472,11 @@ struct Morgonläge: Equatable {
     }
 
     /// Läget ur det telefonen vet. Hämtningen är klar när den inte pågår och data finns.
-    static func nu(ansluten: Bool, hämtar: Bool, räknar: Bool, dataTill: Date?, hämtatTill: Date?) -> Morgonläge {
+    static func nu(ansluten: Bool, hämtar: Bool, räknar: Bool, dataTill: Date?, hämtatTill: Date?,
+                   lucka: ClosedRange<Date>? = nil) -> Morgonläge {
         let h: Läge = hämtar ? .pågår : (dataTill != nil ? .klart : .väntar)
         return Morgonläge(band: ansluten ? .klart : .pågår, hämtar: h, räknar: räknar ? .pågår : .väntar,
-                          dataTill: dataTill, hämtatTill: hämtatTill)
+                          dataTill: dataTill, hämtatTill: hämtatTill, lucka: lucka)
     }
 }
 

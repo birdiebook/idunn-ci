@@ -410,10 +410,6 @@ struct CoachSektion: View {
         if let senast = k.senast {
             text += " · " + senast.formatted(date: .abbreviated, time: .shortened)
         }
-        // BESLUT B148. Passens rörelse i sin egen hink.
-        if let pass = k.pass, let pmb = k.passMegabyte, let ptak = k.passTak {
-            text += "\nRörelse: \(pass) pass · \(Int(pmb.rounded())) av \(Int(ptak.rounded())) MB"
-        }
         return text
     }
 

@@ -1,11 +1,10 @@
 import Foundation
 
-/// BESLUT B120 · BESLUT B142 · BESLUT B151 · METOD M69
+/// BESLUT B120 · BESLUT B142 · METOD M69
 /// Pass som hittas av sig själva: perioder på dagen där pulsen ligger tydligt över vilan länge nog, ur bandets
-/// historik minut för minut. **Appen använder knuten K3** (`knotCandidates`, `PassKnot.swift`, BESLUT B151): pulsen
-/// mot dygnets egen nivå och ihållande rörelse, utan vilopuls och maxpuls. Den äldre regeln här (`candidates`, BESLUT
-/// B120 och B142: ett måttligt pass och ett lätt pass i rörelse, mot pulsreserven) ligger kvar för jämförelse. Ett
-/// hittat pass är ett förslag; inget läggs till utan ett tryck.
+/// historik minut för minut. Två vägar: ett måttligt pass (pulsen högt nog i minst tio minuter) och ett lätt pass i
+/// rörelse (lägre puls, men längre och med handen i rörelse: golf, en lång promenad). Ett hittat pass är ett
+/// förslag; inget läggs till utan ett tryck.
 public enum PassDetection {
     /// En minut ur bandets historik: Unix-minuten, pulsen (medianen över minutens sekunder med puls), rörelsen
     /// (medel av |Δg|, METOD M24) och hudtemperaturen i °C. Det som saknas är `nil`.
@@ -14,21 +13,12 @@ public enum PassDetection {
         public var pulse: Double?
         public var movement: Double?
         public var skinTemperature: Double?
-        /// BESLUT B151. Andelen sekunder i minuten som rör sig (|Δg| minst `movingDelta`), av sekunderna med en
-        /// föregående sekund. Knuten K3 läser den; den gamla regeln gör det inte.
-        public var movingShare: Double?
-        /// BESLUT B151. Armvinkeln i grader: medianen av sekundernas vinkel mot minutens medelriktning (minst 10
-        /// sekunder med tyngdkraft över 0,3 g). Knuten K3 läser den.
-        public var armAngle: Double?
 
-        public init(minute: Int, pulse: Double?, movement: Double? = nil, skinTemperature: Double? = nil,
-                    movingShare: Double? = nil, armAngle: Double? = nil) {
+        public init(minute: Int, pulse: Double?, movement: Double? = nil, skinTemperature: Double? = nil) {
             self.minute = minute
             self.pulse = pulse
             self.movement = movement
             self.skinTemperature = skinTemperature
-            self.movingShare = movingShare
-            self.armAngle = armAngle
         }
     }
 
