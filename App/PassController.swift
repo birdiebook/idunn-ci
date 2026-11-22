@@ -320,13 +320,10 @@ final class PassController: ObservableObject {
 
     // MARK: Förslag (BESLUT B121, METOD M69)
 
-    /// Letar pass i bandets historik för de två senaste dygnen och visar dem som förslag. Utan vilopuls eller maxpuls
-    /// inga förslag. Läsningen görs på filkön; ett förslag som tagits bort kommer inte tillbaka.
-    func hittaFörslag(vilopuls: Double?, maxpuls: Double?) {
-        guard let vila = vilopuls, let max = maxpuls else {
-            förslag = []
-            return
-        }
+    /// Letar pass i bandets historik för de två senaste dygnen och visar dem som förslag, med knuten K3 (BESLUT B151):
+    /// pulsen mot dygnets egen nivå och ihållande rörelse, så varken vilopuls eller maxpuls behövs (B121 krävde dem).
+    /// Läsningen görs på filkön; ett förslag som tagits bort kommer inte tillbaka.
+    func hittaFörslag() {
         guard !förslagPågår else { return }
         förslagPågår = true
         var passen: [Pass] = saved
@@ -334,8 +331,8 @@ final class PassController: ObservableObject {
         let lager: PassSuggestions.Store = förslagslager
         ioQueue.async { [weak self] in
             let läst = PassForslag.sekunder(now: Date())
-            let hittade: [PassDetection.Candidate] = PassSuggestions.suggestions(
-                seconds: läst.sekunder, restingPulse: vila, maxPulse: max, passes: passen, store: lager)
+            let hittade: [PassDetection.Candidate] = PassSuggestions.knotSuggestions(
+                seconds: läst.sekunder, passes: passen, store: lager)
             let nyast: [PassDetection.Candidate] = hittade.sorted {
                 (a: PassDetection.Candidate, b: PassDetection.Candidate) -> Bool in a.startMinute > b.startMinute
             }
