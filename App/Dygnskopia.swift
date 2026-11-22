@@ -83,6 +83,8 @@ final class DygnskopiaModell: ObservableObject {
     private var spår: [String: Spår] = [:]
     private var startad = false
     private var senasteFörsök: Date?
+    /// BESLUT B148. När ett nyss stoppat pass har sin marginal efter stopp och rörelsen kan laddas upp.
+    private var rörelseKlar: Date?
     private var bakgrund: UIBackgroundTaskIdentifier = .invalid
 
     private static let påNyckel: String = "dygnskopia.pa"
@@ -188,6 +190,16 @@ final class DygnskopiaModell: ObservableObject {
             self.läge.fel = fel
             self.läge.arbetar = false
             self.slutaBakgrund()
+            // BESLUT B148. Coachen skickar passet när det stoppas, före marginalen efter stopp: försök igen när den
+            // gått, i stället för att vänta på nästa gång appen öppnas.
+            if let klar = self.rörelseKlar {
+                self.rörelseKlar = nil
+                let vänta: Double = max(1, klar.timeIntervalSinceNow + 5)
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(vänta * 1_000_000_000))
+                    DygnskopiaModell.shared.synka()
+                }
+            }
         }
     }
 
@@ -212,7 +224,11 @@ final class DygnskopiaModell: ObservableObject {
         let gräns: Date = nu.addingTimeInterval(-Double(ArchiveRule.keepRawDays) * 86_400)
         var lista: [RörelsePass] = []
         for p in PassController.shared.saved {
-            guard let stopp = p.stop, p.start >= gräns, stopp.addingTimeInterval(PassMotion.margin + 60) < nu else {
+            guard let stopp = p.stop, p.start >= gräns else { continue }
+            let klar: Date = stopp.addingTimeInterval(PassMotion.margin + 60)
+            guard klar < nu else {
+                let namn: String = PassFile.stamp(start: p.start, timeZone: .current)
+                if fil.rorelse.sent[namn] == nil { rörelseKlar = min(rörelseKlar ?? klar, klar) }
                 continue
             }
             let namn: String = PassFile.stamp(start: p.start, timeZone: .current)
