@@ -57,7 +57,7 @@ public enum PassSeries {
 
     /// METOD M83. Pulskurvan i det sparade passet ritas som medel över fönster, så att kurvan får ungefär lika många
     /// punkter oavsett passets längd.
-    public static let targetPoints = 120.0
+    public static let targetPoints = 240.0
     /// METOD M83. Kortaste fönstret, och fönstren är hela multiplar av det.
     public static let minWindowSeconds: TimeInterval = 5
 

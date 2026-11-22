@@ -713,22 +713,24 @@ struct PassDetail: View {
         return VStack(alignment: .leading, spacing: 8) {
             switch vald {
             case .tempo:
-                PassKortRubrik(text: "Tempo")
+                PassKortRubrik(text: "Tempo").padding(.horizontal, 16)
                 PassKurva(punkter: tempo, längd: pass.duration, start: pass.start, stopp: stopp, omvänd: true,
                           stegval: [15, 30, 60, 120, 300],
                           text: { (v: Double) -> String in KonditionText.tempo(v) },
                           vald: { (v: Double) in (KonditionText.tempo(v), "/km") }, etikett: "Tempokurva")
                 Text("per km, per minut av passet").font(.system(size: 12)).foregroundStyle(Tema.dim)
+                    .padding(.horizontal, 16)
             case .höjd:
-                PassKortRubrik(text: "Höjd")
+                PassKortRubrik(text: "Höjd").padding(.horizontal, 16)
                 PassKurva(punkter: höjd, längd: pass.duration, start: pass.start,
                           text: { (v: Double) -> String in "\(Int(v.rounded())) m" },
                           vald: { (v: Double) in (String(Int(v.rounded())), "m") }, etikett: "Höjdkurva")
                 Text("meter över havet").font(.system(size: 12)).foregroundStyle(Tema.dim)
+                    .padding(.horizontal, 16)
             default:
                 // BESLUT B144 · METOD M83. Pulsen som medel över fönster, och linjen i zonernas färg.
                 let fönster: TimeInterval = PassSeries.window(length: slutPuls)
-                PassKortRubrik(text: "Puls")
+                PassKortRubrik(text: "Puls").padding(.horizontal, 16)
                 PassKurva(punkter: PassSeries.averaged(PassSeries.pulse(pass), window: fönster, split: stopp),
                           längd: slutPuls, start: pass.start, stopp: stopp, lucka: 2 * fönster + 10,
                           band: zonband,
@@ -736,11 +738,10 @@ struct PassDetail: View {
                           vald: { (v: Double) in (String(Int(v.rounded())), "bpm") },
                           etikett: "Pulskurva")
                 Text("lägst " + PassFormat.bpm(pass.minBpm)).font(.system(size: 12)).foregroundStyle(Tema.dim)
+                    .padding(.horizontal, 16)
             }
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Tema.card, in: RoundedRectangle(cornerRadius: 24))
     }
 
     var body: some View {
@@ -781,7 +782,10 @@ struct PassDetail: View {
                 if vald == .karta {
                     PassKarta(pass: pass, maxPulse: maxPulse)
                 } else {
+                    // BESLUT B152. Kurvan utan kort och kant till kant, som Whoops: rubriken och raden under
+                    // står kvar i sidans marginal, kurvan går ut över den.
                     kurvkort(vald, tempo: tempo, höjd: höjd)
+                        .padding(.horizontal, -16)
                 }
                 // BESLUT B117 · METOD M68. Passet har luckor och bandets historik för tiden har inte kommit än.
                 if PassHistory.awaitsHistory(pass, now: Date()) {

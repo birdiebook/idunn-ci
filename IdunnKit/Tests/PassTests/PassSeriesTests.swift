@@ -67,8 +67,8 @@ final class PassSeriesTests: XCTestCase {
     func testFönstretFöljerLängden() {
         XCTAssertEqual(PassSeries.window(length: 0), 5)
         XCTAssertEqual(PassSeries.window(length: 300), 5)
-        XCTAssertEqual(PassSeries.window(length: 22 * 60), 15)
-        XCTAssertEqual(PassSeries.window(length: 3600), 30)
+        XCTAssertEqual(PassSeries.window(length: 22 * 60), 10)
+        XCTAssertEqual(PassSeries.window(length: 3600), 15)
     }
 
     func testMedelPerFönster() {
