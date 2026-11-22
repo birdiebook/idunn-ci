@@ -1,0 +1,43 @@
+42884dcba36b7f053be6618344298a0b49e8a4fe spegel 2026-11-22T18:17:17Z run 45054127510
+== app (xcodebuild build-for-testing, simulator)
+RÖTT: bygget föll (kod 1), 0 felrader
+        ➜ Explicit dependency on target 'Night' in project 'IdunnKit'
+        ➜ Explicit dependency on target 'HeartRate' in project 'IdunnKit'
+        ➜ Explicit dependency on target 'WhoopImport' in project 'IdunnKit'
+        ➜ Explicit dependency on target 'WhoopFrames' in project 'IdunnKit'
+    Target 'Night' in project 'IdunnKit'
+        ➜ Explicit dependency on target 'HeartRate' in project 'IdunnKit'
+        ➜ Explicit dependency on target 'WhoopImport' in project 'IdunnKit'
+        ➜ Explicit dependency on target 'WhoopFrames' in project 'IdunnKit'
+    Target 'WhoopFrames' in project 'IdunnKit'
+        ➜ Explicit dependency on target 'HeartRate' in project 'IdunnKit'
+    Target 'HeartRate' in project 'IdunnKit'
+        ➜ Explicit dependency on target 'HeartRate' in project 'IdunnKit'
+    Target 'HeartRate' in project 'IdunnKit' (no dependencies)
+    Target 'WhoopImport' in project 'IdunnKit'
+        ➜ Explicit dependency on target 'WhoopImport' in project 'IdunnKit'
+    Target 'WhoopImport' in project 'IdunnKit' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/runner/work/idunn-ci/idunn-ci/App/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch x86_64 -isysroot /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk -x c -c /dev/null
+
+Build description signature: f44df6bbb5bfb0380958eb0fe8ec5fca
+Build description path: /Users/runner/Library/Developer/Xcode/DerivedData/Idunn-aeuoafaqzavlsngxhbojaaoekhsg/Build/Intermediates.noindex/XCBuildData/f44df6bbb5bfb0380958eb0fe8ec5fca.xcbuilddata
+ClangStatCache /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk /Users/runner/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.5-22F76-96ae0914227b19deccb34b33ba7b5dea.sdkstatcache
+    cd /Users/runner/work/idunn-ci/idunn-ci/Idunn.xcodeproj
+    /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk -o /Users/runner/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.5-22F76-96ae0914227b19deccb34b33ba7b5dea.sdkstatcache
