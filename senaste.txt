@@ -1,20 +1,20 @@
-e8dbed6472de4d3dcb96ad4f887b26b5e117cc58 spegel 2026-11-22T18:40:08Z run 45055985031
+e0dec1472af51664b11aaa0a054da7f8f08dd157 spegel 2026-11-22T19:20:42Z run 45059890204
 == swift-release
-GRÖNT: 1082 test, 0 fel, 59 s i testerna, bygget 155 s
-Långsammast (av 1082):
-      5.8 s  DemoDataTests.testIdunnsHudtempLiggerUnderWhoopsOchSaknasPåNätterUnderMinstaTäckning
-      2.3 s  NightSoundTests.testNattenLäserSittLjudNärDenRäknasOchSammanfattningenBärDet
-      2.1 s  K18DaysTests.testEnAnnanNattIFilernaPåverkarInteDennaNatt
-      2.0 s  SleepEditTests.testComputeDueRäknarDenÄndradeNattenOchÅterställer
-      2.0 s  K18InspelningarTests.testEnSekundIBådeInspelningOchDygnRäknasEnGång
-      2.0 s  K18DaysTests.testEttNyttByggeRäknarOmEnNattUrArkivetMedDetNyaRäknesättet
-      1.8 s  K18DaysTests.testEttDygnSomArkivOchEttSomRådygnGerSammaNatt
-      1.8 s  NattvalVaktTests.testEnNattUtanDygnetEfterSaknarInteLager
-      1.8 s  K18DaysTests.testNattenUrArkivenÄrSammaNattSomUrDygnsfilerna
-      1.5 s  NightSoundTests.testAnalysenLämnarSammanfattningenFörExportenTillAppen
-      1.2 s  PahittatBandTests.testHämtningDagenEfterFinnsMedNärNattenSattSig
-      1.2 s  PahittatBandTests.testTappatBandMittIEnBitTasUppNästaGångUtanEnFörloradSekund
-      1.2 s  PahittatBandTests.testSparfelKvitterarIngentingOchNästaHämtningFårAllt
-      1.1 s  NattvalVaktTests.testEnNattMedK18GerLagerOchVäljsFöreInspelningen
-      1.1 s  NattvalVaktTests.testEnK18NattVarsFilerInteGårAttLäsaSaknarLager
+GRÖNT: 1081 test, 0 fel, 50 s i testerna, bygget 103 s
+Långsammast (av 1081):
+      4.3 s  DemoDataTests.testIdunnsHudtempLiggerUnderWhoopsOchSaknasPåNätterUnderMinstaTäckning
+      1.9 s  NightSoundTests.testNattenLäserSittLjudNärDenRäknasOchSammanfattningenBärDet
+      1.7 s  K18DaysTests.testEnAnnanNattIFilernaPåverkarInteDennaNatt
+      1.6 s  SleepEditTests.testComputeDueRäknarDenÄndradeNattenOchÅterställer
+      1.6 s  K18DaysTests.testEttNyttByggeRäknarOmEnNattUrArkivetMedDetNyaRäknesättet
+      1.6 s  K18InspelningarTests.testEnSekundIBådeInspelningOchDygnRäknasEnGång
+      1.5 s  K18DaysTests.testEttDygnSomArkivOchEttSomRådygnGerSammaNatt
+      1.5 s  NattvalVaktTests.testEnNattUtanDygnetEfterSaknarInteLager
+      1.4 s  K18DaysTests.testNattenUrArkivenÄrSammaNattSomUrDygnsfilerna
+      1.2 s  NightSoundTests.testAnalysenLämnarSammanfattningenFörExportenTillAppen
+      1.1 s  PahittatBandTests.testHämtningDagenEfterFinnsMedNärNattenSattSig
+      1.0 s  NattvalVaktTests.testEnNattMedK18GerLagerOchVäljsFöreInspelningen
+      0.9 s  K18InspelningarTests.testNattenUrEnInspelningUtanDygnsfilerÄrSammaNattSomIEttSvepMedLager
+      0.9 s  NattvalVaktTests.testEnK18NattSomBandetHördeFörLiteVikerSigFörInspelningenSomLågPåHelaNatten
+      0.9 s  NattvalVaktTests.testEnK18NattVarsFilerInteGårAttLäsaSaknarLager
 
