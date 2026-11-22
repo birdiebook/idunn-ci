@@ -74,8 +74,15 @@ public enum RecordingLog {
         case nightsComputed = "nätter räknade"
         /// BESLUT B152. iOS väckte appen mitt i ett pass: det tunga startarbetet väntar tills appen öppnas.
         case deferredStart = "start uppskjuten"
-        /// BESLUT B152. iOS varnade för minnet (`didReceiveMemoryWarning`); texten bär det minne som är kvar.
+        /// BESLUT B157. Bluetooth i telefonen bytte läge; texten säger vilket (på, av, återställs, nekad, okänt).
+        case bluetooth = "bluetooth"
+        /// BESLUT B157. Appen lade en väntande anslutning på bandet; texten säger varför (start, tappat, misslyckat).
+        case connecting = "ansluter"
+        /// BESLUT B152 · BESLUT B157. iOS varnade för att minnet tar slut; en app i bakgrunden kan stängas strax efter.
+        /// Texten bär det minne som är kvar.
         case memoryWarning = "minnesvarning"
+        /// BESLUT B157. iOS sa till att appen avslutas (kommer inte när en app i bakgrunden stängs tyst).
+        case terminating = "avslutas"
     }
 
     /// PLAN.md A3. Orden för en hämtnings slut, som `NightLedger` räknar om nätter efter.

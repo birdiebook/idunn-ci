@@ -117,6 +117,14 @@ final class IdunnProvUte: XCTestCase {
         XCTAssertFalse(p.isOutdoor)
         XCTAssertNotNil(p.pulseAtStop)
         try fånga(NavigationStack { PassDetail(pass: p, zonMaxpuls: maxPuls) }, namn: "pass-sparat-inne", höjd: 1_200)
+        // BESLUT B154 · BESLUT B153. Zon 3 vald, och påhittad puls före Start: bara zon 3 i färg, och pulsen före
+        // passet uttonad ut till kanten.
+        let t0: Int = Int(p.start.timeIntervalSince1970)
+        let före: [PassHistory.Reading] = stride(from: -600, to: 0, by: 5).map { (s: Int) -> PassHistory.Reading in
+            PassHistory.Reading(time: t0 + s, bpm: 80 + 10 * (600 + s) / 600)
+        }
+        try fånga(NavigationStack { PassDetail(pass: p, zonMaxpuls: maxPuls, omkring: före, valdZon: 3) },
+                  namn: "pass-sparat-zon", höjd: 1_200)
     }
 
     // MARK: Ritverktyget

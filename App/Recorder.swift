@@ -235,6 +235,7 @@ final class Recorder: NSObject, ObservableObject {
                                                name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appWillTerminate),
                                                name: UIApplication.willTerminateNotification, object: nil)
+        // BESLUT B157. En minnesvarning i loggen förklarar en natt där appen tystnar och startas om.
         NotificationCenter.default.addObserver(self, selector: #selector(memoryWarning),
                                                name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
         // BESLUT B152. Väckt av iOS mitt i ett pass (passets puls eller rörelse var på när appen dog): bara listorna,
@@ -255,8 +256,16 @@ final class Recorder: NSObject, ObservableObject {
             self?.considerAutoFetch()
         }
         // PLAN.md A3. Startad i bakgrunden = väckt för bandet; i förgrunden = användaren öppnade appen.
-        logEvent(.appStarted, text: (UIApplication.shared.applicationState == .background ? "i bakgrunden, " : "")
-                 + Self.minneKvar())
+        // BESLUT B157. Läget står alltid, så att en start mitt i natten går att tolka; B152: och minnet som är kvar.
+        let läge: String = {
+            switch UIApplication.shared.applicationState {
+            case .background: return "i bakgrunden"
+            case .inactive: return "inaktiv"
+            case .active: return "aktiv"
+            @unknown default: return "okänt läge"
+            }
+        }()
+        logEvent(.appStarted, text: läge + ", " + Self.minneKvar())
     }
 
     /// BESLUT B152. Minnet appen har kvar innan iOS avslutar den, i MB: telefonens läge, inget mätvärde om kroppen.
@@ -627,6 +636,7 @@ final class Recorder: NSObject, ObservableObject {
         } else {
             link = .connecting
             central?.connect(p, options: nil)
+            logEvent(.connecting, text: "väntar på bandet")
         }
     }
 
@@ -640,7 +650,9 @@ final class Recorder: NSObject, ObservableObject {
         }
         switch b.state {
         case .connected: didConnect(b)
-        case .connecting: link = .connecting
+        case .connecting:
+            link = .connecting
+            logEvent(.connecting, text: "redan väntande")
         default: connect(b)
         }
     }
@@ -850,6 +862,7 @@ final class Recorder: NSObject, ObservableObject {
 
     /// Appen avslutas: stoppet går direkt om ett prov (BESLUT B53) eller passets puls (BESLUT B61) pågår.
     @objc private func appWillTerminate() {
+        logEvent(.terminating)
         runImu(imu.flushStop(now: Date()))
         runPulse(pulse.flushStop(now: Date()))
         syncFiles()
@@ -1048,6 +1061,18 @@ extension Recorder {
 
 extension Recorder: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ c: CBCentralManager) {
+        // BESLUT B157. Läget i loggen: efter en omstart syns om Bluetooth kom på och om en anslutning lades.
+        let ord: String = {
+            switch c.state {
+            case .poweredOn: return "på"
+            case .poweredOff: return "av"
+            case .resetting: return "återställs"
+            case .unauthorized: return "nekad"
+            case .unsupported: return "saknas"
+            default: return "okänt"
+            }
+        }()
+        logEvent(.bluetooth, text: ord)
         switch c.state {
         case .poweredOn:
             resumeListening()
@@ -1117,9 +1142,13 @@ extension Recorder: CBCentralManagerDelegate {
         liveStream = FrameAssembly.Stream()
         // METOD M23. Det som inte kvitterats ligger kvar i bandet.
         if fetching, let mer = session?.disconnected() { run(mer) }
-        guard c.state == .poweredOn else { return }
+        guard c.state == .poweredOn else {
+            logEvent(.connecting, text: "ingen ny anslutning: bluetooth inte på")
+            return
+        }
         link = .connecting
         c.connect(p, options: nil)
+        logEvent(.connecting, text: "efter frånkoppling")
     }
 }
 
