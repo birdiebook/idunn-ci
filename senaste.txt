@@ -1,20 +1,20 @@
-aadbc4d585510c6f4e83c0654861a4d0d974b6bc spegel 2026-11-21T20:59:52Z run 44948908765
+5acc76e20341144987e35d4bd028d9c91dfbe0f4 spegel 2026-11-22T10:32:20Z run 45012628870
 == swift-release
-GRÖNT: 1053 test, 0 fel, 51 s i testerna, bygget 101 s
+GRÖNT: 1053 test, 0 fel, 50 s i testerna, bygget 105 s
 Långsammast (av 1053):
-      4.4 s  DemoDataTests.testIdunnsHudtempLiggerUnderWhoopsOchSaknasPåNätterUnderMinstaTäckning
+      4.3 s  DemoDataTests.testIdunnsHudtempLiggerUnderWhoopsOchSaknasPåNätterUnderMinstaTäckning
       1.9 s  NightSoundTests.testNattenLäserSittLjudNärDenRäknasOchSammanfattningenBärDet
       1.7 s  K18DaysTests.testEnAnnanNattIFilernaPåverkarInteDennaNatt
       1.6 s  SleepEditTests.testComputeDueRäknarDenÄndradeNattenOchÅterställer
       1.6 s  K18InspelningarTests.testEnSekundIBådeInspelningOchDygnRäknasEnGång
       1.6 s  K18DaysTests.testEttNyttByggeRäknarOmEnNattUrArkivetMedDetNyaRäknesättet
-      1.5 s  K18DaysTests.testNattenUrArkivenÄrSammaNattSomUrDygnsfilerna
       1.5 s  K18DaysTests.testEttDygnSomArkivOchEttSomRådygnGerSammaNatt
       1.4 s  NattvalVaktTests.testEnNattUtanDygnetEfterSaknarInteLager
+      1.4 s  K18DaysTests.testNattenUrArkivenÄrSammaNattSomUrDygnsfilerna
       1.2 s  NightSoundTests.testAnalysenLämnarSammanfattningenFörExportenTillAppen
-      1.0 s  NattvalVaktTests.testEnK18NattVarsFilerInteGårAttLäsaSaknarLager
+      1.0 s  PahittatBandTests.testWhoopAppenSynkarSamtidigtIdunnStopparOchFårÄndåHelaNatten
+      1.0 s  PahittatBandTests.testSparfelKvitterarIngentingOchNästaHämtningFårAllt
+      1.0 s  PahittatBandTests.testAppenDödadMittIHämtningenTasUppNästaGång
       0.9 s  PahittatBandTests.testHämtningDagenEfterFinnsMedNärNattenSattSig
-      0.9 s  NattvalVaktTests.testEnK18NattSomBandetHördeFörLiteVikerSigFörInspelningenSomLågPåHelaNatten
       0.9 s  NattvalVaktTests.testEnNattMedK18GerLagerOchVäljsFöreInspelningen
-      0.9 s  PahittatBandTests.testTappatBandMittIEnBitTasUppNästaGångUtanEnFörloradSekund
 
