@@ -627,10 +627,12 @@ struct PassDetail: View {
     @State private var problem: String?
     /// BESLUT B138. Vilken kurva som visas.
     @State private var kurva: PassKurvVal
+    /// BESLUT B152 · METOD M86. Bandets puls strax före och efter passet, läst ur dygnens filer när passet öppnas.
+    @State private var omkring: [PassHistory.Reading]
 
     init(pass: Pass, actions: PassActions = PassActions(), maxPulse: Double? = nil,
          konditionMaxpuls: Double? = nil, zonMaxpuls: Double? = nil, kurva: PassKurvVal = .puls,
-         ändraÖppet: Bool = false, close: @escaping () -> Void = {}) {
+         ändraÖppet: Bool = false, omkring: [PassHistory.Reading] = [], close: @escaping () -> Void = {}) {
         self.pass = pass
         self.actions = actions
         self.maxPulse = maxPulse
@@ -638,6 +640,7 @@ struct PassDetail: View {
         self.zonMaxpuls = zonMaxpuls
         _kurva = State(initialValue: kurva)
         _ändraÖppet = State(initialValue: ändraÖppet)
+        _omkring = State(initialValue: omkring)
         self.close = close
     }
 
@@ -730,13 +733,17 @@ struct PassDetail: View {
             default:
                 // BESLUT B144 · METOD M83. Pulsen som medel över fönster, och linjen i zonernas färg.
                 let fönster: TimeInterval = PassSeries.window(length: slutPuls)
+                // BESLUT B152 · METOD M86. Pulsen utanför passet, uttonad ut till kanterna, när dygnens filer har den.
+                let marginal: TimeInterval = PassSeries.margin(length: slutPuls)
+                let utanför: [PassSeries.Point] = PassSeries.outside(omkring, start: pass.start, end: slutPuls,
+                                                                      margin: marginal, window: fönster)
                 PassKortRubrik(text: "Puls").padding(.horizontal, 16)
                 PassKurva(punkter: PassSeries.averaged(PassSeries.pulse(pass), window: fönster, split: stopp),
                           längd: slutPuls, start: pass.start, stopp: stopp, lucka: 2 * fönster + 10,
                           band: zonband,
                           text: { (v: Double) -> String in String(Int(v.rounded())) },
                           vald: { (v: Double) in (String(Int(v.rounded())), "bpm") },
-                          etikett: "Pulskurva")
+                          etikett: "Pulskurva", utanför: utanför, marginal: utanför.isEmpty ? 0 : marginal)
                 Text("lägst " + PassFormat.bpm(pass.minBpm)).font(.system(size: 12)).foregroundStyle(Tema.dim)
                     .padding(.horizontal, 16)
             }
@@ -801,6 +808,17 @@ struct PassDetail: View {
             .padding(.vertical, 12)
         }
         .background(Tema.bg)
+        // BESLUT B152 · METOD M86. Pulsen omkring passet ur dygnens filer, utanför huvudkön (en dygnsfil kan vara tiotals MB).
+        .task(id: pass.id) {
+            guard omkring.isEmpty, pass.stop != nil else { return }
+            let p: Pass = pass
+            let marginal: TimeInterval = PassSeries.margin(
+                length: (p.afterEnd ?? p.stop ?? p.start).timeIntervalSince(p.start))
+            let läst: [PassHistory.Reading] = await Task.detached(priority: .userInitiated) {
+                PassHistorik.omkring(p, marginal: marginal, now: Date())
+            }.value
+            omkring = läst
+        }
         // BESLUT B133. Ingen accentfärg: knapparna i fältet är vita.
         .tint(Tema.text)
         .navigationBarTitleDisplayMode(.inline)

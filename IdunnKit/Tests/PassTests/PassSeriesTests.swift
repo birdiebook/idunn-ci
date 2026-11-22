@@ -94,4 +94,27 @@ final class PassSeriesTests: XCTestCase {
         let p = [PassSeries.Point(seconds: 1, value: 100), PassSeries.Point(seconds: 61, value: 110)]
         XCTAssertEqual(PassSeries.averaged(p, window: 10).map { $0.seconds }, [1, 61])
     }
+
+    func testMarginalenFöljerLängden() {
+        XCTAssertEqual(PassSeries.margin(length: 0), 60)
+        XCTAssertEqual(PassSeries.margin(length: 20 * 60), 90)
+        XCTAssertEqual(PassSeries.margin(length: 48 * 60), 210)
+        XCTAssertEqual(PassSeries.margin(length: 3600), 270)
+    }
+
+    func testUtanförTarBaraMarginalenOchBlandarInteSidorna() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let t0 = 1_000_000
+        // Prov var sekund från 200 s före start till 200 s efter slutet (600 s): 90 före, 150 efter.
+        var prov: [PassHistory.Reading] = []
+        for s in -200...800 { prov.append(PassHistory.Reading(time: t0 + s, bpm: s < 0 ? 90 : (s > 600 ? 150 : 120))) }
+        let ut = PassSeries.outside(prov, start: start, end: 600, margin: 60, window: 5)
+        XCTAssertFalse(ut.isEmpty)
+        XCTAssertTrue(ut.allSatisfy { ($0.seconds >= -60 && $0.seconds < 0) || ($0.seconds > 600 && $0.seconds <= 660) })
+        XCTAssertTrue(ut.filter { $0.seconds < 0 }.allSatisfy { $0.value == 90 })
+        XCTAssertTrue(ut.filter { $0.seconds > 600 }.allSatisfy { $0.value == 150 })
+        XCTAssertEqual(ut.filter { $0.seconds < 0 }.count, 12)
+        XCTAssertGreaterThanOrEqual(ut.filter { $0.seconds > 600 }.count, 12)
+        XCTAssertEqual(ut.map(\.seconds), ut.map(\.seconds).sorted())
+    }
 }

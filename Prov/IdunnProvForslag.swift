@@ -93,6 +93,9 @@ final class IdunnProvForslag: XCTestCase {
         let sparat: Pass = PassSuggestions.pass(from: utanTyp, kind: nil, readings: prov, label: val.label,
                                                 start: tider.start, stop: tider.stopp)
         try fånga(NavigationStack { PassDetail(pass: sparat, zonMaxpuls: 190) }, namn: "pass-egen-typ", höjd: 1_100)
+        // BESLUT B152 · METOD M86. Samma pass med pulsen före och efter, uttonad ut till kanterna.
+        try fånga(NavigationStack { PassDetail(pass: sparat, zonMaxpuls: 190, omkring: prov) },
+                  namn: "pass-omkring", höjd: 1_100)
         try fånga(PassAndraBlad(pass: sparat, nu: nu, spara: { _, _, _ in }), namn: "pass-andra", höjd: 1_150)
 
         // Bladet efter Stopp: typerna med Annat… och anteckningen.
