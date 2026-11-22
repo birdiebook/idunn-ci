@@ -324,7 +324,8 @@ final class PassController: ObservableObject {
     /// pulsen mot dygnets egen nivå och ihållande rörelse, så varken vilopuls eller maxpuls behövs (B121 krävde dem).
     /// Läsningen görs på filkön; ett förslag som tagits bort kommer inte tillbaka.
     func hittaFörslag() {
-        guard !förslagPågår else { return }
+        // BESLUT B152. Inte medan ett pass går: förslagen läser två dygns rådygn, och passet behöver telefonen.
+        guard !förslagPågår, state.phase != .running else { return }
         förslagPågår = true
         var passen: [Pass] = saved
         if let p = state.pass { passen.append(p) }

@@ -132,6 +132,9 @@ final class DygnskopiaModell: ObservableObject {
     /// Laddar upp de dygn som är nya eller ändrade, nyast först. En körning i taget.
     func synka() {
         guard startad, läge.på, !läge.arbetar, CoachModell.shared.redo else { return }
+        // BESLUT B152. Inte medan ett pass går: uppladdningen läser hela dygn. Passets Stopp skickar coachen, och
+        // kopian följer med.
+        guard PassController.shared.state.phase != .running else { return }
         guard let c = CoachNyckelring.läs(), c.isValid else {
             läge.kopplad = false
             return

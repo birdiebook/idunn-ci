@@ -4,6 +4,7 @@ import HeartRate
 import Night
 import UIKit
 import WhoopFrames
+import os
 
 /// En dygnsfil i listan: stammen (`dygn-yyyy-MM-dd`) och filernas storlek.
 /// `bytes` är allt dygnet tar på telefonen: rådygnet och arkivet (BESLUT B41).
@@ -204,6 +205,8 @@ final class Recorder: NSObject, ObservableObject {
     /// Vem som skrev senast, så att ett skrivfel går till rätt maskin.
     private enum Writer { case fetch, imu, pulse }
     private var lastWriter: Writer = .fetch
+    /// BESLUT B152. iOS väckte appen mitt i ett pass: arkiveringen, nätternas räkning och rådygnen väntar på `refresh`.
+    private var startUppskjuten = false
 
     override init() {
         super.init()
@@ -229,8 +232,19 @@ final class Recorder: NSObject, ObservableObject {
                                                name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appWillTerminate),
                                                name: UIApplication.willTerminateNotification, object: nil)
-        reloadSummaries()
-        seedStatus()
+        NotificationCenter.default.addObserver(self, selector: #selector(memoryWarning),
+                                               name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+        // BESLUT B152. Väckt av iOS mitt i ett pass (passets puls eller rörelse var på när appen dog): bara listorna,
+        // inte arkiveringen, nätternas räkning och rådygnen. `refresh` gör resten när appen öppnas.
+        let mittIPass: Bool = defaults.bool(forKey: Key.pulseArmed) || defaults.bool(forKey: Key.imuArmed)
+        if mittIPass, UIApplication.shared.applicationState != .active {
+            startUppskjuten = true
+            reloadSummaries()
+            logEvent(.deferredStart)
+        } else {
+            reloadSummaries()
+            seedStatus()
+        }
         // PLAN.md A3. Den automatiska hämtningen: förra hämtningens tider, och regeln en gång i minuten medan appen
         // är vaken (i bakgrunden bara när iOS väckt den).
         loadAutoState()
@@ -238,7 +252,17 @@ final class Recorder: NSObject, ObservableObject {
             self?.considerAutoFetch()
         }
         // PLAN.md A3. Startad i bakgrunden = väckt för bandet; i förgrunden = användaren öppnade appen.
-        logEvent(.appStarted, text: UIApplication.shared.applicationState == .background ? "i bakgrunden" : nil)
+        logEvent(.appStarted, text: (UIApplication.shared.applicationState == .background ? "i bakgrunden, " : "")
+                 + Self.minneKvar())
+    }
+
+    /// BESLUT B152. Minnet appen har kvar innan iOS avslutar den, i MB: telefonens läge, inget mätvärde om kroppen.
+    static func minneKvar() -> String {
+        "minne kvar \(os_proc_available_memory() / 1_048_576) MB"
+    }
+
+    @objc private func memoryWarning() {
+        logEvent(.memoryWarning, text: Self.minneKvar())
     }
 
     // MARK: Dygnsfilen
@@ -380,6 +404,7 @@ final class Recorder: NSObject, ObservableObject {
 
     /// Vyn blev synlig: läs listorna igen, och statusen om den inte kunde läsas.
     func refresh() {
+        startUppskjuten = false
         reloadSummaries()
         if !seeded { seedStatus() }
         considerAutoFetch(force: true)
@@ -438,26 +463,30 @@ final class Recorder: NSObject, ObservableObject {
     func reloadSummaries() {
         // Dygnen som skrivs just nu arkiveras inte: dagens datum och filen som är öppen.
         let pågår: Set<String> = Set([activeDay] + (cursor.stem.map { [$0] } ?? []))
+        let lätt: Bool = startUppskjuten
         DispatchQueue.global(qos: .utility).async {
             // BESLUT B41. Färdiga dygn arkiveras, och rådygn äldre än 14 dagar
             // raderas när arkivet är kontrollerat. Dygn kopieras inte längre
             // till Documents (BESLUT B22); gamla inspelningar gör det fortfarande.
-            DayArchiver.run(skip: pågår)
-            NightExport.mirror()
+            if !lätt {
+                DayArchiver.run(skip: pågår)
+                NightExport.mirror()
+            }
             let gamla: [NightSummary] = NightFiles.stems().compactMap(NightSummary.load)
             let k18: [NightSummary] = K18Nights.summaries()
             let d = NightFiles.dayStems().map { (stem: String) -> DayFile in
                 DayFile(stem: stem, bytes: NightFiles.size(stem), rawBytes: NightFiles.rawSize(stem),
                         archiveBytes: NightFiles.archiveSize(stem))
             }
-            let lagring = StorageUsage.measure()
+            let lagring: StorageUsage? = lätt ? nil : StorageUsage.measure()
             let ändringar: SleepEdits = SleepEditFile.load()
             DispatchQueue.main.async {
                 self.sleepEdits = ändringar
                 self.summaries = Recorder.chosen(k18: k18, old: gamla)
                 self.days = d
-                self.storage = lagring
-                self.computeNights()
+                if let lagring { self.storage = lagring }
+                // BESLUT B152. Nätterna räknas när appen öppnas, inte när iOS väckt den mitt i ett pass.
+                if !self.startUppskjuten { self.computeNights() }
             }
         }
     }

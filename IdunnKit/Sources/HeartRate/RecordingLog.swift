@@ -72,6 +72,10 @@ public enum RecordingLog {
         case fetchStopped = "hämtning stoppad"
         /// PLAN.md A3. Nätterna räknades och minst en sparades.
         case nightsComputed = "nätter räknade"
+        /// BESLUT B152. iOS väckte appen mitt i ett pass: det tunga startarbetet väntar tills appen öppnas.
+        case deferredStart = "start uppskjuten"
+        /// BESLUT B152. iOS varnade för minnet (`didReceiveMemoryWarning`); texten bär det minne som är kvar.
+        case memoryWarning = "minnesvarning"
     }
 
     /// PLAN.md A3. Orden för en hämtnings slut, som `NightLedger` räknar om nätter efter.
