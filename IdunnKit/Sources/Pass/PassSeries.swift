@@ -57,12 +57,12 @@ public enum PassSeries {
 
     /// METOD M83. Pulskurvan i det sparade passet ritas som medel över fönster, så att kurvan får ungefär lika många
     /// punkter oavsett passets längd.
-    public static let targetPoints = 720.0
+    public static let targetPoints = 120.0
     /// METOD M83. Kortaste fönstret, och fönstren är hela multiplar av det.
     public static let minWindowSeconds: TimeInterval = 5
 
-    /// METOD M83. Fönstrets längd för en kurva över `length` sekunder: längden delad på 720, avrundad uppåt till hela
-    /// 5 s, minst 5 s (upp till en timme ger 5 s, två timmar 10 s).
+    /// METOD M83. Fönstrets längd för en kurva över `length` sekunder: längden delad på 120, avrundad uppåt till hela
+    /// 5 s, minst 5 s (22 minuter ger 15 s, en timme 30 s).
     public static func window(length: TimeInterval) -> TimeInterval {
         guard length > 0 else { return minWindowSeconds }
         let steg = (length / targetPoints / minWindowSeconds).rounded(.up)
@@ -88,38 +88,6 @@ public enum PassSeries {
                 Point(seconds: f.t / Double(f.n), value: f.v / Double(f.n))
             }
             .sorted { (a: Point, b: Point) -> Bool in a.seconds < b.seconds }
-    }
-
-    /// METOD M86. Andelen av passets längd som visas före Start och efter slutet, uttonat.
-    public static let marginShare = 0.07
-    /// METOD M86. Minsta tiden före och efter.
-    public static let minMarginSeconds: TimeInterval = 60
-
-    /// METOD M86. Tiden som visas på var sida om passet: 7 % av längden, avrundad uppåt till hela 30 s, minst 60 s
-    /// (48 minuter ger 3,5 min, 20 minuter 1,5 min).
-    public static func margin(length: TimeInterval) -> TimeInterval {
-        let rå = max(length, 0) * marginShare
-        return max(minMarginSeconds, (rå / 30).rounded(.up) * 30)
-    }
-
-    /// METOD M86. Pulsen utanför passet: proven inom `margin` före Start och efter `end` (sekunder från Start), som
-    /// medel över `window` var för sig på varje sida, så att inget fönster blandar sidorna. Prov inne i passet tas
-    /// inte med (de finns redan i passets egna prov).
-    public static func outside(_ readings: [PassHistory.Reading], start: Date, end: TimeInterval,
-                               margin: TimeInterval, window: TimeInterval) -> [Point] {
-        let t0 = start.timeIntervalSince1970
-        let punkter = readings.map { (r: PassHistory.Reading) -> Point in
-            Point(seconds: Double(r.time) - t0, value: Double(r.bpm))
-        }
-        let före = punkter.filter { (p: Point) -> Bool in p.seconds < 0 && p.seconds >= -margin }
-        let efter = punkter.filter { (p: Point) -> Bool in p.seconds > end && p.seconds <= end + margin }
-        // Före räknas bakåt från Start (förskjutet så att fönstren slutar vid 0), efter från slutet.
-        let förskjutning = (margin / window).rounded(.up) * window
-        let f = averaged(före.map { Point(seconds: $0.seconds + förskjutning, value: $0.value) }, window: window)
-            .map { Point(seconds: $0.seconds - förskjutning, value: $0.value) }
-        let e = averaged(efter.map { Point(seconds: $0.seconds - end, value: $0.value) }, window: window)
-            .map { Point(seconds: $0.seconds + end, value: $0.value) }
-        return f + e
     }
 
     /// Punkten närmast tiden `seconds` (för markören); `nil` utan punkter.

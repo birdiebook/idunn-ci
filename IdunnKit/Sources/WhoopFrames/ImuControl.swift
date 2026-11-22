@@ -24,8 +24,9 @@ import HeartRate
 ///   strömmen själv efter en återanslutning 2026-10-14.
 ///
 /// - **Passet (BESLUT B147, METOD M84):** ett pass äger strömmen (`Owner.pass`) från Start till Stopp, med
-///   `passTimeout` i stället för `hardTimeout`. Är länken uppe men rörelsen tyst i `restartAfter` (också direkt
-///   efter starten) skickas 81 + 106 en gång till, en gång per anslutning. Dör appen och passet tas upp igen,
+///   `passTimeout` i stället för `hardTimeout`. Ett nej på ett startkommando stoppar inte passets ström (bara
+///   provets); svaret skrivs som `imu-svar <kommando> <resultat>`. Är länken uppe men rörelsen tyst i
+///   `restartAfter` (också direkt efter starten) skickas 81 + 106 en gång till, en gång per anslutning. Dör appen och passet tas upp igen,
 ///   tar passet över strömmen i stället för att stoppet efter omstarten skickas (`start(now:owner:)`).
 ///
 /// Maskinen räknar bara ramar, byte och svar — aldrig ett värde ur rörelsen
@@ -444,7 +445,16 @@ public struct ImuControl: Sendable {
         if r.result != 2 { awaiting.remove(at: i) }
         let start = c.number == .startRawData || (c.number == .toggleImuMode && c.payload == [0x01, 0x01])
         if start, r.result != 1, r.result != 2, phase == .starting || phase == .on {
-            return stop(now: now, reason: .refused)
+            // METOD M84. Svaret skrivs, så att nästa fil visar vad bandet sade.
+            let märke: Action = .mark("imu-svar \(r.command) \(r.result)")
+            // BESLUT B147 · METOD M84. Ett pass stoppar inte strömmen på ett nej: mätt 2026-11-22 svarade bandet nej på
+            // en ny start medan rörelsen gick, och stoppet släckte den resten av passet. Passets Stopp och
+            // `passTimeout` stänger strömmen ändå.
+            if owner == .pass {
+                restarting = false
+                return [märke]
+            }
+            return [märke] + stop(now: now, reason: .refused)
         }
         return []
     }

@@ -55,10 +55,6 @@ struct PassKurva: View {
     var vald: (Double) -> (tal: String, enhet: String) = { (v: Double) in (String(Int(v.rounded())), "") }
     /// Vad skärmläsaren säger om kurvan.
     var etikett: String = "Kurva"
-    /// BESLUT B152 · METOD M86. Punkter före Start och efter slutet (sekunder från Start), ritade uttonade.
-    var utanför: [PassSeries.Point] = []
-    /// BESLUT B152. Sekunder som visas på var sida om passet; med en marginal går kurvan ända ut till kanterna.
-    var marginal: TimeInterval = 0
 
     @State private var markerad: Date? = nil
 
@@ -67,7 +63,7 @@ struct PassKurva: View {
          lucka: TimeInterval? = nil, omvänd: Bool = false, band: [Band] = [],
          stegval: [Double]? = nil, text: @escaping (Double) -> String,
          vald: @escaping (Double) -> (tal: String, enhet: String) = { (v: Double) in (String(Int(v.rounded())), "") },
-         etikett: String = "Kurva", utanför: [PassSeries.Point] = [], marginal: TimeInterval = 0) {
+         etikett: String = "Kurva") {
         self.punkter = punkter
         self.längd = längd
         self.start = start
@@ -79,14 +75,11 @@ struct PassKurva: View {
         self.text = text
         self.vald = vald
         self.etikett = etikett
-        self.utanför = utanför
-        self.marginal = max(0, marginal)
     }
 
     /// Kurvans kanter i ytan, som Nattens (B99): början och slutet syns, och skalans tal står utanför till höger.
-    /// BESLUT B152. Kurvan ligger kant till kant på skärmen: till vänster plats för halva klockslaget under Start, till höger för skalans tal.
-    static let kant: (vänster: CGFloat, höger: CGFloat) = (26, 34)
-    private static let ytaHöjd: CGFloat = 300
+    static let kant: (vänster: CGFloat, höger: CGFloat) = (20, 30)
+    private static let ytaHöjd: CGFloat = 230
     /// Ritytan ovanför klockslagen.
     private static let topp: CGFloat = 12
     private static let botten: CGFloat = 34
@@ -95,14 +88,6 @@ struct PassKurva: View {
     /// Tidsaxelns nollpunkt i sekunder sedan 1970 (passets start, eller 0 utan start).
     private var t0: TimeInterval { start?.timeIntervalSince1970 ?? 0 }
     private var xMax: TimeInterval { max(1, längd, punkter.last?.seconds ?? 0) }
-    /// Kanterna i ytan: med en marginal går kurvan ända ut, och skalans tal står ovanpå den uttonade delen.
-    private var kanter: (vänster: CGFloat, höger: CGFloat) { marginal > 0 ? (0, 0) : Self.kant }
-    /// Alla punkter i tidsordning, de utanför passet med.
-    private var alla: [PassSeries.Point] {
-        utanför.isEmpty ? punkter : (utanför + punkter).sorted { (a: PassSeries.Point, b: PassSeries.Point) -> Bool in
-            a.seconds < b.seconds
-        }
-    }
 
     /// Skalan: jämna steg (1, 2 eller 5 gånger en tiopotens) så att det blir fyra till sju linjer.
     /// Med `stegval` (t.ex. tempots 15, 30, 60 s) väljs det minsta av dem som räcker.
@@ -125,7 +110,7 @@ struct PassKurva: View {
     private var valdPunkt: PassSeries.Point? {
         guard let m = markerad else { return nil }
         let s: TimeInterval = m.timeIntervalSince1970 - t0
-        guard let n = PassSeries.nearest(alla, to: s) else { return nil }
+        guard let n = PassSeries.nearest(punkter, to: s) else { return nil }
         return abs(n.seconds - s) <= (lucka ?? .infinity) ? n : nil
     }
 
@@ -144,8 +129,8 @@ struct PassKurva: View {
             .overlay(alignment: hörn(v)) {
                 if let v = v { hörnetikett(v) }
             }
-            .pekMarkering($markerad, från: t0 - marginal, till: t0 + xMax + marginal,
-                          vänster: kanter.vänster, höger: kanter.höger)
+            .pekMarkering($markerad, från: t0, till: t0 + xMax,
+                          vänster: Self.kant.vänster, höger: Self.kant.höger)
             // BESLUT B99. Ett knäpp när punkten kommer, inget medan fingret drar.
             .sensoryFeedback(.impact(weight: .light), trigger: markerad != nil) { (före: Bool, nu: Bool) -> Bool in
                 nu && !före
@@ -158,7 +143,7 @@ struct PassKurva: View {
     /// BESLUT B98. Talet uppe till vänster, och till höger när punkten ligger i kurvans vänstra del.
     private func hörn(_ v: PassSeries.Point?) -> Alignment {
         guard let v = v else { return .topLeading }
-        return (v.seconds + marginal) / (xMax + 2 * marginal) < 0.4 ? .topTrailing : .topLeading
+        return v.seconds / xMax < 0.4 ? .topTrailing : .topLeading
     }
 
     private func tidstext(_ sekunder: TimeInterval) -> String {
@@ -193,16 +178,12 @@ struct PassKurva: View {
         let top: CGFloat = Self.topp
         let ch: CGFloat = H - Self.topp - Self.botten
         let bas: CGFloat = top + ch
-        let vä: CGFloat = kanter.vänster
-        let bredd: CGFloat = max(1, W - vä - kanter.höger)
+        let vä: CGFloat = Self.kant.vänster
+        let bredd: CGFloat = max(1, W - vä - Self.kant.höger)
         let xMax: TimeInterval = self.xMax
-        let m: TimeInterval = marginal
-        let x = { (s: TimeInterval) -> CGFloat in vä + CGFloat(min(1, max(0, (s + m) / (xMax + 2 * m)))) * bredd }
-        let alla: [PassSeries.Point] = self.alla
-        // Före Start, efter Stopp och efter slutet ritas uttonat.
-        let inneTill: TimeInterval = stopp ?? xMax
+        let x = { (s: TimeInterval) -> CGFloat in vä + CGFloat(min(1, max(0, s / xMax))) * bredd }
 
-        let värden: [Double] = alla.map { (q: PassSeries.Point) -> Double in q.value }
+        let värden: [Double] = punkter.map { (q: PassSeries.Point) -> Double in q.value }
         let sk: (lo: Double, hi: Double, steg: Double) = Self.skala(värden.min() ?? 0, värden.max() ?? 0, stegval: stegval)
         let vänd: Bool = omvänd
         let y = { (v: Double) -> CGFloat in
@@ -249,8 +230,8 @@ struct PassKurva: View {
         var nu: [CGPoint] = []
         var nuEfter: Bool = false
         var förra: PassSeries.Point? = nil
-        for q in alla where q.seconds >= -m && q.seconds <= xMax + m {
-            let ärEfter: Bool = q.seconds < 0 || q.seconds > inneTill
+        for q in punkter {
+            let ärEfter: Bool = stopp.map { (s: TimeInterval) -> Bool in q.seconds > s } ?? false
             let pt: CGPoint = CGPoint(x: x(q.seconds), y: y(q.value))
             let bryt: Bool = förra.map { (f: PassSeries.Point) -> Bool in
                 lucka.map { (l: TimeInterval) -> Bool in q.seconds - f.seconds > l } ?? false

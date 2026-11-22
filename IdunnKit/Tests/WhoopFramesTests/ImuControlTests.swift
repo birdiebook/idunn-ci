@@ -120,7 +120,7 @@ final class ImuControlTests: XCTestCase {
         // NOOP: kommando 63 svarar 3 ("stöds inte") på Whoop 5. Ett sådant svar på 106 stoppar.
         let a = c.receive(Self.frame(Ramar.response(106, seq: k106.sequence, result: 3), k: "fd4b0003", t: t0 + 0.4),
                           now: t0 + 0.4)
-        XCTAssertEqual(a, [.mark("imu-stopp nej")])
+        XCTAssertEqual(a, [.mark("imu-svar 106 3"), .mark("imu-stopp nej")])
         XCTAssertEqual(c.progress.responses, [ImuControl.Response(command: 81, on: nil, result: 1),
                                               ImuControl.Response(command: 106, on: true, result: 3)])
         // Ett svar på ett kommando provet inte skickat räknas inte.
@@ -402,6 +402,28 @@ final class ImuControlTests: XCTestCase {
         _ = d.start(now: t0, owner: .pass)
         _ = d.tick(now: t0, canWrite: true)
         XCTAssertEqual(d.writeFailed(now: t0 + 0.1), [.mark("imu-stopp skrivfel")])
+    }
+
+    func testEttNejStopparIntePassetsStröm() {
+        // BESLUT B147 · METOD M84. Mätt 2026-11-22: bandet svarade nej på en ny start medan rörelsen gick.
+        var c = ImuControl(now: t0)
+        påslagen(&c, owner: .pass, t: t0)
+        _ = c.watch(now: t0 + 1, linkUp: true)
+        XCTAssertEqual(c.watch(now: t0 + 12, linkUp: true).last, .mark("imu-omstart"))
+        guard case .write(let k81) = c.tick(now: t0 + 12, canWrite: true).last else { return XCTFail("81 skrevs inte") }
+        let a = c.receive(Self.frame(Ramar.response(81, seq: k81.sequence, result: 3), k: "fd4b0003", t: t0 + 12.2),
+                          now: t0 + 12.2)
+        XCTAssertEqual(a, [.mark("imu-svar 81 3")])
+        XCTAssertEqual(c.phase, .on)
+        // 106 skrivs ändå, och inget stopp ligger i kön.
+        XCTAssertEqual(skrivna(c.tick(now: t0 + 12.3, canWrite: true)), [[106, 1, 1]])
+        XCTAssertFalse(c.wantsWrite)
+        XCTAssertEqual(c.phase, .on)
+        // Rörelsen räknas vidare, och passets Stopp stänger strömmen som vanligt.
+        _ = c.receive(Self.frame(Self.r21(sekund: 1), t: t0 + 13), now: t0 + 13)
+        XCTAssertEqual(c.progress.r21Frames, 1)
+        XCTAssertEqual(c.stop(now: t0 + 20, reason: .pass), [.mark("imu-stopp pass")])
+        XCTAssertEqual(skrivna(c.tick(now: t0 + 20, canWrite: true)), [[82, 1]])
     }
 
     func testPassetTarÖverEfterEnOmstart() {

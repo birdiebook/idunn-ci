@@ -47,29 +47,4 @@ enum PassHistorik {
         ut.poster = poster.map { (r: K18Record) -> PassHistory.Reading in PassHistory.Reading(time: r.time, bpm: r.pulse) }
         return ut
     }
-
-    /// BESLUT B152 · METOD M86. Bandets puls strax före Start och strax efter slutet av passet (`marginal` sekunder på var
-    /// sida), ur dygnens filer, för den uttonade pulsen kant till kant i kurvan. Bara läsning, som `läs`; körs aldrig på
-    /// huvudkön. Tomt när dygnens filer inte har tiden.
-    static func omkring(_ pass: Pass, marginal: TimeInterval, now: Date) -> [PassHistory.Reading] {
-        let slut: Date = pass.afterEnd ?? pass.stop ?? pass.start
-        let från: Date = pass.start.addingTimeInterval(-marginal)
-        let till: Date = slut.addingTimeInterval(marginal)
-        let zon: Int = TimeZone.current.secondsFromGMT(for: pass.start)
-        // Historiken för tiden kan ligga i en senare dygnsfil än passets egen (se ovan).
-        let sökTill: Date = min(now, pass.start.addingTimeInterval(PassHistory.searchSeconds)).addingTimeInterval(1)
-        var samlare = K18Collector(from: från, to: till)
-        for stam in DayLog.stems(touching: från, to: sökTill, utcOffsetSeconds: zon) {
-            guard NightFiles.size(stam) > 0, let fil = K18Nights.load(stam) else { continue }
-            if let ramar = fil.frames {
-                samlare.read(log: ramar)
-            } else if let data = fil.archive, let arkiv = try? DayArchive.decode(data) {
-                samlare.read(archive: arkiv)
-            }
-            if let sista = samlare.series().records.last, Double(sista.time) >= till.timeIntervalSince1970 { break }
-        }
-        return samlare.series().records.map { (r: K18Record) -> PassHistory.Reading in
-            PassHistory.Reading(time: r.time, bpm: r.pulse)
-        }
-    }
 }
