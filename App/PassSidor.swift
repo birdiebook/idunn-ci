@@ -8,8 +8,11 @@ import SleepNeed
 enum PassZonText {
     static func namn(_ zon: Int) -> String {
         switch zon {
-        // BESLUT B146. Zonerna heter sina nummer, som de är kända.
-        case 1...5: return "Zon \(zon)"
+        case 1: return "Mycket lätt"
+        case 2: return "Lätt"
+        case 3: return "Måttlig"
+        case 4: return "Hård"
+        case 5: return "Maximal"
         default: return "Vila"
         }
     }
@@ -222,7 +225,7 @@ struct PassNuSida: View {
     }
 
     private var zonRad: String {
-        if let z = zon { return PassZonText.namn(z) }
+        if let z = zon { return PassZonText.namn(z) + " · zon \(z)" }
         return "Puls"
     }
 

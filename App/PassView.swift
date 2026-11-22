@@ -27,6 +27,7 @@ struct PassView: View {
                    actions: PassActions(start: { controller.start() },
                                         stop: { controller.stop() },
                                         setKind: { controller.setKind($0) },
+                                        setLabel: { controller.setLabel($0) },
                                         finish: { controller.finish() },
                                         delete: { controller.delete($0) },
                                         export: { controller.exportFile($0) },
@@ -34,8 +35,10 @@ struct PassView: View {
                                         exportMedSpår: { controller.exportFile($0, medSpår: true) },
                                         startSteptest: { controller.startSteptest(höjdCm: $0) },
                                         sättProfil: { kondition.sätt(profil: $0) },
-                                        läggTillFörslag: { controller.läggTill($0, typ: $1) },
-                                        taBortFörslag: { controller.taBortFörslag($0) }),
+                                        läggTillFörslag: { controller.läggTill($0, val: $1) },
+                                        taBortFörslag: { controller.taBortFörslag($0) },
+                                        förhandsFörslag: { controller.förhandsvisa($0, val: $1) },
+                                        ändra: { controller.ändra($0, label: $1, start: $2, stopp: $3) }),
                    kondition: PassKondition(modell: kondition, slut: controller.steptestSlut,
                                           slag: controller.steptestSlag),
                    förslag: controller.förslag,
@@ -57,6 +60,8 @@ struct PassActions {
     var start: () -> Void = {}
     var stop: () -> Void = {}
     var setKind: (PassKind) -> Void = { _ in }
+    /// BESLUT B147. Märkningen av passet som pågår eller just stoppats: typ eller egna ord, och anteckningen.
+    var setLabel: (PassLabel) -> Void = { _ in }
     var finish: () -> Void = {}
     var delete: (Pass) -> Void = { _ in }
     /// Passets zip i en tillfällig mapp, för delningsbladet; `nil` när den inte gick att skriva.
@@ -69,10 +74,21 @@ struct PassActions {
     var startSteptest: (Double) -> Void = { _ in }
     /// BESLUT B110. Profilen ändrades i formuläret som bladet före steptestet länkar till.
     var sättProfil: (FitnessProfile) -> Void = { _ in }
-    /// BESLUT B121. Lägger ett förslag till som ett pass av vald typ.
-    var läggTillFörslag: (PassDetection.Candidate, PassKind) -> Void = { _, _ in }
+    /// BESLUT B121 · BESLUT B147. Lägger ett förslag till som ett pass med vald märkning och valda tider.
+    var läggTillFörslag: (PassDetection.Candidate, PassForslagsval) -> Void = { _, _ in }
     /// BESLUT B121. Tar bort ett förslag för gott.
     var taBortFörslag: (PassDetection.Candidate) -> Void = { _ in }
+    /// BESLUT B147. Förslaget som pass med valda tider, för talen i bladet; `nil` utan bandets poster.
+    var förhandsFörslag: (PassDetection.Candidate, PassForslagsval) -> Pass? = { _, _ in nil }
+    /// BESLUT B147. Ändrar ett sparat pass: märkningen och tiderna.
+    var ändra: (Pass, PassLabel, Date, Date) -> Void = { _, _, _, _ in }
+}
+
+/// BESLUT B147. Det som valts i förslagsbladet: märkningen och tiderna.
+struct PassForslagsval: Equatable {
+    var label: PassLabel
+    var start: Date
+    var stopp: Date
 }
 
 /// Formen på passets siffror: samma överallt, så att en tid alltid läses likadant.
@@ -111,6 +127,11 @@ enum PassFormat {
         case .golf: return "figure.golf"
         case nil: return "heart"
         }
+    }
+
+    /// BESLUT B147. Ikonen för ett pass: egna ord har en etikett.
+    static func symbol(_ p: Pass) -> String {
+        p.customKind != nil ? "tag" : symbol(p.kind)
     }
 }
 
@@ -260,15 +281,16 @@ struct PassScreen: View {
         // BESLUT B121. Bladet för ett förslag: välj typ och lägg till, eller ta bort.
         .sheet(item: $valtFörslag) { (val: Förslagsval) in
             FörslagBlad(förslag: val.förslag, nu: now,
-                        läggTill: { (typ: PassKind) -> Void in
-                            actions.läggTillFörslag(val.förslag, typ)
+                        läggTill: { (v: PassForslagsval) -> Void in
+                            actions.läggTillFörslag(val.förslag, v)
                             valtFörslag = nil
                         },
                         taBort: {
                             actions.taBortFörslag(val.förslag)
                             valtFörslag = nil
-                        })
-                .presentationDetents([.medium])
+                        },
+                        förhand: { (v: PassForslagsval) -> Pass? in actions.förhandsFörslag(val.förslag, v) })
+                .presentationDetents([.large])
                 .presentationBackground(Tema.bg)
         }
         .sensoryFeedback(.impact, trigger: phase)
@@ -301,10 +323,15 @@ struct PassScreen: View {
                 PassForslagKort(förslag: förslag, nu: now,
                                 läggTill: { (f: PassDetection.Candidate) -> Void in
                                     if let typ = f.kind {
-                                        actions.läggTillFörslag(f, typ)
+                                        actions.läggTillFörslag(f, PassForslagsval(label: PassLabel(kind: typ),
+                                                                                   start: f.start, stopp: f.end))
                                     } else {
                                         valtFörslag = Förslagsval(id: f.startMinute, förslag: f)
                                     }
+                                },
+                                // BESLUT B147. Raden öppnar bladet: typ, egna ord, anteckning och tider.
+                                öppna: { (f: PassDetection.Candidate) -> Void in
+                                    valtFörslag = Förslagsval(id: f.startMinute, förslag: f)
                                 },
                                 inteEtt: { (f: PassDetection.Candidate) -> Void in actions.taBortFörslag(f) })
             }
@@ -455,10 +482,8 @@ struct PassScreen: View {
             PassChart(pass: p, now: now)
                 .frame(height: 200)
             PassRecovery(pass: p)
-            // Ett steptest har redan sin typ.
-            if !p.isStepTest {
-                KindPicker(selected: p.kind, onSelect: actions.setKind)
-            }
+            // BESLUT B147. Typen, egna ord och anteckningen; ett steptest har redan sin typ och får bara anteckningen.
+            PassEfterMarkning(pass: p, setLabel: actions.setLabel)
             Button(action: actions.finish) {
                 Label("Klar", systemImage: "checkmark")
                     .font(.title2.weight(.semibold))
@@ -525,7 +550,7 @@ private struct PassRow: View {
 
     private var titel: String {
         if pass.isStepTest { return "Steptest" }
-        return (pass.kind?.displayName ?? "Pass") + (pass.isOutdoor ? " ute" : "")
+        return pass.kindName + (pass.isOutdoor ? " ute" : "")
     }
 
     private var undertext: String {
@@ -541,7 +566,7 @@ private struct PassRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            PassIkonruta(symbol: pass.isStepTest ? "figure.stairs" : PassFormat.symbol(pass.kind))
+            PassIkonruta(symbol: pass.isStepTest ? "figure.stairs" : PassFormat.symbol(pass))
             VStack(alignment: .leading, spacing: 2) {
                 Text(titel)
                     .font(.system(size: 15, weight: .semibold))
@@ -597,25 +622,22 @@ struct PassDetail: View {
 
     @State private var shared: SharedPassFile?
     @State private var confirmDelete = false
+    /// BESLUT B147. Bladet Ändra.
+    @State private var ändraÖppet = false
     @State private var problem: String?
     /// BESLUT B138. Vilken kurva som visas.
     @State private var kurva: PassKurvVal
-    /// BESLUT B146. Zonen som kurvan färgar; nil = kurvan blågrå.
-    @State private var valdZon: Int?
-    /// BESLUT B146. Pulsen före Start ur dygnens filer, läst när vyn visas; tom tills den lästs eller om den saknas.
-    @State private var förePuls: [PassSeries.Point]
 
     init(pass: Pass, actions: PassActions = PassActions(), maxPulse: Double? = nil,
          konditionMaxpuls: Double? = nil, zonMaxpuls: Double? = nil, kurva: PassKurvVal = .puls,
-         valdZon: Int? = nil, förePuls: [PassSeries.Point] = [], close: @escaping () -> Void = {}) {
+         ändraÖppet: Bool = false, close: @escaping () -> Void = {}) {
         self.pass = pass
         self.actions = actions
         self.maxPulse = maxPulse
         self.konditionMaxpuls = konditionMaxpuls
         self.zonMaxpuls = zonMaxpuls
         _kurva = State(initialValue: kurva)
-        _valdZon = State(initialValue: valdZon)
-        _förePuls = State(initialValue: förePuls)
+        _ändraÖppet = State(initialValue: ändraÖppet)
         self.close = close
     }
 
@@ -659,25 +681,12 @@ struct PassDetail: View {
         return PassZones.time(pass.activeSamples) { (bpm: Int) -> Int in PassLoad.zone(bpm: bpm, maxPulse: m) }
     }
 
-    /// BESLUT B144 · BESLUT B146 · METOD M53. Zonernas undre gränser i slag per minut; bara den valda zonen har sin
-    /// färg, de andra kurvans blågrå. Tomt utan maxpuls eller utan vald zon: då är hela linjen blågrå.
+    /// BESLUT B144 · METOD M53. Zonernas undre gränser i slag per minut med zonens färg; tomt utan maxpuls.
     private var zonband: [PassKurva.Band] {
-        guard let m = zonMaxpuls, let vald = valdZon else { return [] }
+        guard let m = zonMaxpuls else { return [] }
         return SleepNeedRules.zoneLowerBounds.enumerated().map { (e: (offset: Int, element: Double)) -> PassKurva.Band in
-            let zon: Int = e.offset + 1
-            return PassKurva.Band(från: e.element * m, färg: zon == vald ? PassZonTrappa.color(zon) : Tema.pulse)
+            PassKurva.Band(från: e.element * m, färg: PassZonTrappa.color(e.offset + 1))
         }
-    }
-
-    /// BESLUT B146. Pulskurvans kant på var sida om passet: en tiondel av passets längd, minst 30 s och högst så lång
-    /// som mätningen efter stopp. Lika lång före Start som efter Stopp, så att passet står i mitten och tar det mesta
-    /// av bredden. 0 för ett pass utan stopp.
-    static let kantAndel: Double = 0.1
-    static let kantMinst: TimeInterval = 30
-    private var kantSekunder: TimeInterval {
-        guard let stop = pass.stop else { return 0 }
-        let efter: TimeInterval = max(0, (pass.afterEnd ?? stop).timeIntervalSince(stop))
-        return min(efter, max(Self.kantMinst, Self.kantAndel * pass.duration))
     }
 
     /// BESLUT B138. Kurvan som visas: den valda när den finns för passet, annars Puls.
@@ -699,10 +708,7 @@ struct PassDetail: View {
     }
 
     private func kurvkort(_ vald: PassKurvVal, tempo: [PassSeries.Point], höjd: [PassSeries.Point]) -> some View {
-        // BESLUT B146. Pulskurvan slutar en kant efter Stopp; mätningen efter stopp kan vara längre än så.
-        let slutPuls: TimeInterval = pass.stop.map { (s: Date) -> TimeInterval in
-            s.timeIntervalSince(pass.start) + kantSekunder
-        } ?? (pass.afterEnd ?? pass.start).timeIntervalSince(pass.start)
+        let slutPuls: TimeInterval = (pass.afterEnd ?? pass.stop ?? pass.start).timeIntervalSince(pass.start)
         let stopp: TimeInterval? = pass.stop.map { (s: Date) -> TimeInterval in s.timeIntervalSince(pass.start) }
         return VStack(alignment: .leading, spacing: 8) {
             switch vald {
@@ -723,13 +729,8 @@ struct PassDetail: View {
                 // BESLUT B144 · METOD M83. Pulsen som medel över fönster, och linjen i zonernas färg.
                 let fönster: TimeInterval = PassSeries.window(length: slutPuls)
                 PassKortRubrik(text: "Puls")
-                let kant: TimeInterval = kantSekunder
-                let synligt: [PassSeries.Point] = (förePuls + PassSeries.pulse(pass)).filter { (q: PassSeries.Point) -> Bool in
-                    q.seconds >= -kant && q.seconds <= slutPuls
-                }
-                PassKurva(punkter: PassSeries.averaged(synligt, window: fönster, split: stopp),
-                          längd: slutPuls, start: pass.start, stopp: stopp, före: kant,
-                          lucka: 2 * fönster + 10,
+                PassKurva(punkter: PassSeries.averaged(PassSeries.pulse(pass), window: fönster, split: stopp),
+                          längd: slutPuls, start: pass.start, stopp: stopp, lucka: 2 * fönster + 10,
                           band: zonband,
                           text: { (v: Double) -> String in String(Int(v.rounded())) },
                           vald: { (v: Double) in (String(Int(v.rounded())), "bpm") },
@@ -750,12 +751,19 @@ struct PassDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(pass.kind?.displayName ?? "Pass")
+                    Text(pass.kindName)
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(Tema.text)
                     Text(pass.start, format: .dateTime.weekday(.wide).day().month(.wide).hour().minute())
                         .font(.system(size: 14))
                         .foregroundStyle(Tema.dim)
+                    // BESLUT B147. Anteckningen under rubriken.
+                    if let n = pass.note {
+                        Text(n)
+                            .font(.system(size: 14))
+                            .foregroundStyle(Tema.text)
+                            .padding(.top, 6)
+                    }
                 }
                 PassTreTal(pass: pass)
                 // BESLUT B138. Ett pass ute: sträckan och tempot.
@@ -782,31 +790,24 @@ struct PassDetail: View {
                         .foregroundStyle(Tema.dim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                PassZonKort(zoner: zoner, vald: valdZon) { (z: Int) in
-                    withAnimation(.easeInOut(duration: 0.2)) { valdZon = valdZon == z ? nil : z }
-                }
-                // BESLUT B147. Kortet Efter stopp är borttaget tills vidare.
+                PassZonKort(zoner: zoner)
+                if pass.stop != nil { PassEfterStoppKort(pass: pass) }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
         .background(Tema.bg)
-        // BESLUT B146. Pulsen före Start ur dygnens filer, på en bakgrundskö (en dygnsfil kan vara tiotals MB).
-        .task(id: pass.id) {
-            let sek: TimeInterval = kantSekunder
-            guard sek > 0, förePuls.isEmpty else { return }
-            let p: Pass = pass
-            let poster: [PassHistory.Reading] = await Task.detached(priority: .utility) {
-                PassHistorik.före(p, sekunder: sek)
-            }.value
-            förePuls = poster.map { (r: PassHistory.Reading) -> PassSeries.Point in
-                PassSeries.Point(seconds: TimeInterval(r.time) - p.start.timeIntervalSince1970, value: Double(r.bpm))
-            }
-        }
         // BESLUT B133. Ingen accentfärg: knapparna i fältet är vita.
         .tint(Tema.text)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // BESLUT B147. Ändra: typ, egna ord, anteckning och tider.
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { ändraÖppet = true } label: {
+                    Label("Ändra", systemImage: "pencil")
+                }
+                .tint(Tema.text)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 exportKnapp.tint(Tema.text)
             }
@@ -823,6 +824,16 @@ struct PassDetail: View {
                 close()
             }
             Button("Avbryt", role: .cancel) {}
+        }
+        .sheet(isPresented: $ändraÖppet) {
+            PassAndraBlad(pass: pass,
+                          spara: { (l: PassLabel, start: Date, stopp: Date) -> Void in
+                              actions.ändra(pass, l, start, stopp)
+                              ändraÖppet = false
+                          },
+                          avbryt: { ändraÖppet = false })
+                .presentationDetents([.large])
+                .presentationBackground(Tema.bg)
         }
         .sheet(item: $shared) { f in
             PassShareSheet(items: [f.url])
@@ -963,27 +974,27 @@ private struct PassRecovery: View {
     }
 }
 
-/// Typerna som knappar; den valda är fylld.
-private struct KindPicker: View {
-    let selected: PassKind?
-    let onSelect: (PassKind) -> Void
+/// BESLUT B147. Märkningen i bladet efter Stopp: vald typ eller egna ord och anteckningen går till passet medan de
+/// skrivs, så att en dödad app inte tappar dem.
+private struct PassEfterMarkning: View {
+    let pass: Pass
+    let setLabel: (PassLabel) -> Void
+    @State private var val: PassMarkningsval
+
+    init(pass: Pass, setLabel: @escaping (PassLabel) -> Void) {
+        self.pass = pass
+        self.setLabel = setLabel
+        _val = State(initialValue: PassMarkningsval(PassLabel(pass)))
+    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(PassKind.allCases, id: \.self) { k in
-                Button { onSelect(k) } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: PassFormat.symbol(k)).font(.title2)
-                        Text(k.displayName).font(.caption2).lineLimit(1).minimumScaleFactor(0.7)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 60)
-                    .foregroundStyle(selected == k ? Color.white : Color.primary)
-                    .background(RoundedRectangle(cornerRadius: 12)
-                        .fill(selected == k ? Tema.red : Color.secondary.opacity(0.15)))
-                }
-                .buttonStyle(.plain)
+        PassMarkningVy(val: $val, medTyp: !pass.isStepTest)
+            .onChange(of: val) { (_: PassMarkningsval, ny: PassMarkningsval) in
+                var l: PassLabel = ny.label
+                // Ett steptest behåller sin typ.
+                if pass.isStepTest { l.kind = pass.kind }
+                setLabel(l)
             }
-        }
     }
 }
 
@@ -1049,66 +1060,85 @@ struct FörslagRad: View {
     }
 }
 
-/// Bladet för ett förslag: typen väljs (den gissade är förvald), och förslaget läggs till eller tas bort.
+/// BESLUT B121 · BESLUT B147. Bladet för ett förslag: typen väljs (den gissade är förvald) eller skrivs med egna ord,
+/// en anteckning, och start och slut flyttas i minutsteg innan förslaget läggs till. Talen räknas om ur bandets
+/// historik för de valda tiderna. Förslaget som det var sparas i passet (`Pass.suggested`).
 struct FörslagBlad: View {
     let förslag: PassDetection.Candidate
     var nu: Date = Date()
-    let läggTill: (PassKind) -> Void
+    let läggTill: (PassForslagsval) -> Void
     let taBort: () -> Void
+    /// Passet som det blir med valda tider, för talen; `nil` ger streck.
+    var förhand: (PassForslagsval) -> Pass? = { _ in nil }
 
-    @State private var typ: PassKind?
+    @State private var val: PassMarkningsval
+    @State private var start: Date
+    @State private var stopp: Date
+    private let gränser: PassEdit.Limits
 
-    init(förslag: PassDetection.Candidate, nu: Date = Date(), läggTill: @escaping (PassKind) -> Void,
-         taBort: @escaping () -> Void) {
+    init(förslag: PassDetection.Candidate, nu: Date = Date(), läggTill: @escaping (PassForslagsval) -> Void,
+         taBort: @escaping () -> Void, förhand: @escaping (PassForslagsval) -> Pass? = { _ in nil },
+         förval: PassMarkningsval? = nil, tider: (start: Date, stopp: Date)? = nil) {
         self.förslag = förslag
         self.nu = nu
         self.läggTill = läggTill
         self.taBort = taBort
-        _typ = State(initialValue: förslag.kind)
+        self.förhand = förhand
+        // `förval` och `tider` bara för provet: bladet som det ser ut när något redan valts.
+        _val = State(initialValue: förval
+            ?? PassMarkningsval(typ: förslag.kind.map { (k: PassKind) -> PassTypval in .typ(k) }))
+        _start = State(initialValue: tider?.start ?? förslag.start)
+        _stopp = State(initialValue: tider?.stopp ?? förslag.end)
+        gränser = PassEdit.Limits(start: förslag.start, stop: förslag.end, now: nu)
     }
 
+    private var valt: PassForslagsval { PassForslagsval(label: val.label, start: start, stopp: stopp) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Lägg till passet?").font(.title3.weight(.semibold))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(PassForslagText.rubrik(förslag))
-                Text(PassForslagText.tid(förslag, nu: nu))
-            }
-            .foregroundStyle(.secondary)
-
-            Text("Typ").font(.headline)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
-                ForEach(PassKind.allCases, id: \.self) { (k: PassKind) in
-                    Button { typ = k } label: {
-                        Text(k.displayName)
-                            .font(.subheadline)
-                            .frame(maxWidth: .infinity, minHeight: 40)
-                            .foregroundStyle(typ == k ? Color.white : Tema.text)
-                            .background(RoundedRectangle(cornerRadius: 10)
-                                .fill(typ == k ? Tema.accent : Tema.card))
-                    }
-                    .buttonStyle(.plain)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Lägg till passet?").font(.title3.weight(.semibold)).foregroundStyle(Tema.text)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(PassForslagText.rubrik(förslag))
+                    Text(PassForslagText.tid(förslag, nu: nu))
                 }
-            }
+                .foregroundStyle(Tema.dim)
 
-            Text("Pulsen fylls ur bandets historik.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                Text("Typ").font(.headline).foregroundStyle(Tema.text)
+                PassMarkningVy(val: $val)
 
-            Button {
-                if let t = typ { läggTill(t) }
-            } label: {
-                Text("Lägg till").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(typ == nil)
+                Text("Tider").font(.headline).foregroundStyle(Tema.text)
+                PassTiderVy(start: $start, stopp: $stopp, gränser: gränser, ursprung: (förslag.start, förslag.end))
+                PassForhandsTal(pass: förhand(valt))
 
-            Button(role: .destructive, action: taBort) {
-                Text("Ta bort förslaget").frame(maxWidth: .infinity)
+                Text("Pulsen fylls ur bandets historik.")
+                    .font(.footnote)
+                    .foregroundStyle(Tema.dim)
+
+                Button {
+                    läggTill(valt)
+                } label: {
+                    Text("Lägg till")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Tema.bg)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(Capsule().fill(Tema.text))
+                        .opacity(val.harTyp ? 1 : 0.4)
+                }
+                .buttonStyle(.plain)
+                .disabled(!val.harTyp)
+
+                Button(action: taBort) {
+                    Text("Inte ett pass")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Tema.text)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.bordered)
+            .padding(20)
         }
-        .padding(20)
-        .presentationDetents([.medium])
+        .background(Tema.bg)
     }
 }

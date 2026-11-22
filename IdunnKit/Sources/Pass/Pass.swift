@@ -27,6 +27,21 @@ public enum PassKind: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// BESLUT B147 · METOD M84
+/// Förslaget ett pass kom ur, som det var när det lades till: start, slut och den gissade typen (`nil` när ingen
+/// gissades). Står bredvid det användaren valde, så att skillnaden visar var förslagen låg fel.
+public struct PassOrigin: Codable, Equatable, Sendable {
+    public var start: Date
+    public var end: Date
+    public var kind: PassKind?
+
+    public init(start: Date, end: Date, kind: PassKind?) {
+        self.start = start
+        self.end = end
+        self.kind = kind
+    }
+}
+
 /// BESLUT B117 · METOD M68
 /// Varifrån ett pulsprov kom, när det inte kom live under passet.
 public enum PassSampleSource: String, Codable, Sendable {
@@ -100,10 +115,19 @@ public struct Pass: Codable, Equatable, Identifiable, Sendable {
     /// BESLUT B117 · METOD M68. Så långt hade bandets historik nått när passet senast fylldes ur den; `nil` innan
     /// någon historik efter passets slut är sedd. En fil från ett äldre bygge saknar nyckeln.
     public var historyThrough: Date?
+    /// BESLUT B147. användaren egen typ med egna ord ("Annat…"), när ingen av de fasta passar; `kind` är då `nil`.
+    /// En fil från ett äldre bygge saknar nyckeln.
+    public var customKind: String?
+    /// BESLUT B147. En valfri anteckning. En fil från ett äldre bygge saknar nyckeln.
+    public var note: String?
+    /// BESLUT B147 · METOD M84. Förslaget passet kom ur, som det var när det lades till: facit för passupptäckten.
+    /// `nil` för ett pass som startats för hand och i en fil från ett äldre bygge.
+    public var suggested: PassOrigin?
 
     public init(id: UUID = UUID(), start: Date, stop: Date? = nil, afterEnd: Date? = nil,
                 kind: PassKind? = nil, samples: [PassSample] = [], track: [TrackPoint]? = nil,
-                stepHeightCm: Double? = nil, historyThrough: Date? = nil) {
+                stepHeightCm: Double? = nil, historyThrough: Date? = nil, customKind: String? = nil,
+                note: String? = nil, suggested: PassOrigin? = nil) {
         self.id = id
         self.start = start
         self.stop = stop
@@ -113,6 +137,14 @@ public struct Pass: Codable, Equatable, Identifiable, Sendable {
         self.track = track
         self.stepHeightCm = stepHeightCm
         self.historyThrough = historyThrough
+        self.customKind = customKind
+        self.note = note
+        self.suggested = suggested
+    }
+
+    /// BESLUT B147. Namnet på passets typ: den egna typen, annars den fasta, annars "Pass".
+    public var kindName: String {
+        customKind ?? kind?.displayName ?? "Pass"
     }
 
     /// Passet mäts ute, med spår.

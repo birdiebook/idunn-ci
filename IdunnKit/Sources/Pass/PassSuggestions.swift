@@ -135,13 +135,18 @@ public enum PassSuggestions {
                                  excluded: excluded(passes: passes, store: store), rules: rules)
     }
 
-    /// METOD M69 · METOD M68. Förslaget som ett pass av typen `kind`: Start och Stopp är förslagets, efterperioden
-    /// är stängd efter `PassRules.afterSeconds`, och pulsen fylls ur bandets historik (`PassHistory.fill`), prov för
-    /// prov med källan historik.
-    public static func pass(from c: PassDetection.Candidate, kind: PassKind, readings: [PassHistory.Reading],
-                            id: UUID = UUID()) -> Pass {
-        var p = Pass(id: id, start: c.start, stop: c.end, kind: kind)
-        p.afterEnd = c.end.addingTimeInterval(afterSeconds)
+    /// METOD M69 · METOD M68 · BESLUT B147. Förslaget som ett pass av typen `kind`: Start och Stopp är förslagets (eller
+    /// de tider användaren flyttat dem till), efterperioden är stängd efter `PassRules.afterSeconds`, och pulsen fylls ur
+    /// bandets historik (`PassHistory.fill`), prov för prov med källan historik. Förslaget som det var sparas i
+    /// `suggested`, bredvid det som valdes.
+    public static func pass(from c: PassDetection.Candidate, kind: PassKind?, readings: [PassHistory.Reading],
+                            id: UUID = UUID(), label: PassLabel? = nil, start: Date? = nil, stop: Date? = nil) -> Pass {
+        let början: Date = start ?? c.start
+        let slut: Date = max(början, stop ?? c.end)
+        var p = Pass(id: id, start: början, stop: slut, kind: kind)
+        p.afterEnd = slut.addingTimeInterval(afterSeconds)
+        if let l = label { PassEdit.apply(l, to: &p) }
+        p.suggested = PassOrigin(start: c.start, end: c.end, kind: c.kind)
         return PassHistory.fill(p, readings: readings)
     }
 }
