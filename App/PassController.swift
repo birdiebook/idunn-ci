@@ -140,6 +140,41 @@ final class PassController: ObservableObject {
         persistCurrent()
     }
 
+    /// BESLUT B150. Passets märkning: typ eller egna ord, och anteckningen. Sparas direkt, som typen.
+    func setLabel(_ label: PassLabel) {
+        state.setLabel(label)
+        persistCurrent()
+    }
+
+    /// BESLUT B150 · METOD M85. Ändrar ett sparat pass: märkningen, och start och slut. Proven utanför det nya fönstret
+    /// tas bort och de minuter som saknas fylls ur bandets historik (på filkön); talen räknas om ur proven. Ett
+    /// förslags ursprung (`suggested`) står kvar som det var.
+    func ändra(_ pass: Pass, label: PassLabel, start: Date, stopp: Date) {
+        guard let i = saved.firstIndex(where: { $0.id == pass.id }) else { return }
+        var p: Pass = saved[i]
+        PassEdit.apply(label, to: &p)
+        if p.stop != nil { p = PassEdit.retimed(p, start: start, stop: stopp) }
+        guard p != saved[i] else { return }
+        var lista: [Pass] = saved
+        lista[i] = p
+        saved = Self.newestFirst(lista)
+        persist(p)
+        historikSedd[p.id] = nil
+        let ändrat: Pass = p
+        ioQueue.async { [weak self] in
+            let läst = PassHistorik.läs(ändrat, now: Date(), sedda: [:])
+            let fyllt: Pass = PassHistory.fill(ändrat, readings: läst.poster, through: läst.nått)
+            DispatchQueue.main.async {
+                guard let self = self, let j = self.saved.firstIndex(where: { $0.id == ändrat.id }),
+                      self.saved[j] == ändrat, fyllt != ändrat else { return }
+                // Bara om passet inte ändrats igen medan historiken lästes.
+                self.saved[j] = fyllt
+                self.historikSedd[fyllt.id] = läst.sedda
+                self.persist(fyllt)
+            }
+        }
+    }
+
     /// "Klar": avslutar efterperioden och sparar direkt.
     func finish() {
         let före = state.phase
@@ -311,9 +346,27 @@ final class PassController: ObservableObject {
         }
     }
 
-    /// Lägger ett förslag till som ett pass av typen `typ`, sparat som ett färdigt pass, och tar bort förslaget ur listan.
-    func läggTill(_ f: PassDetection.Candidate, typ: PassKind) {
-        let p: Pass = PassSuggestions.pass(from: f, kind: typ, readings: förslagsposter)
+    /// BESLUT B150. Bandets poster för ett förslag med valda tider: fönstret och efterperioden, med en minut på var sida.
+    private func posterFör(start: Date, stopp: Date) -> [PassHistory.Reading] {
+        let från: Int = Int(start.timeIntervalSince1970) - 60
+        let till: Int = Int(stopp.timeIntervalSince1970 + PassRules.afterSeconds) + 60
+        guard från <= till else { return [] }
+        return förslagsposter.filter { (r: PassHistory.Reading) -> Bool in (från...till).contains(r.time) }
+    }
+
+    /// BESLUT B150. Förslaget som pass med valda tider och märkning, för talen i bladet; `nil` utan bandets poster.
+    func förhandsvisa(_ f: PassDetection.Candidate, val: PassForslagsval) -> Pass? {
+        guard !förslagsposter.isEmpty else { return nil }
+        return PassSuggestions.pass(from: f, kind: val.label.kind, readings: posterFör(start: val.start, stopp: val.stopp),
+                                    label: val.label, start: val.start, stop: val.stopp)
+    }
+
+    /// Lägger ett förslag till som ett pass med vald märkning och valda tider, sparat som ett färdigt pass med förslaget
+    /// som det var (`suggested`, BESLUT B150), och tar bort förslaget ur listan.
+    func läggTill(_ f: PassDetection.Candidate, val: PassForslagsval) {
+        let p: Pass = PassSuggestions.pass(from: f, kind: val.label.kind,
+                                           readings: posterFör(start: val.start, stopp: val.stopp),
+                                           label: val.label, start: val.start, stop: val.stopp)
         persist(p)
         saved = Self.newestFirst(saved.filter { $0.id != p.id } + [p])
         förslag.removeAll { $0 == f }

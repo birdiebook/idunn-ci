@@ -47,27 +47,4 @@ enum PassHistorik {
         ut.poster = poster.map { (r: K18Record) -> PassHistory.Reading in PassHistory.Reading(time: r.time, bpm: r.pulse) }
         return ut
     }
-
-    /// BESLUT B146. Pulsen under `sekunder` före passets Start ur dygnens filer, för kurvans del före Start. Bara
-    /// läsning; passet ändras inte. Poster utan puls (utanför `PassHistory.bpmRange`) tas bort.
-    static func före(_ pass: Pass, sekunder: TimeInterval) -> [PassHistory.Reading] {
-        guard sekunder > 0 else { return [] }
-        let från: Date = pass.start.addingTimeInterval(-sekunder)
-        let zon: Int = TimeZone.current.secondsFromGMT(for: pass.start)
-        var samlare = K18Collector(from: från, to: pass.start)
-        // Posterna kan ha kommit med en senare synk: läs från dygnet då fönstret börjar till dygnet efter passet.
-        let till: Date = min(Date(), pass.start.addingTimeInterval(86_400))
-        for stam in DayLog.stems(touching: från, to: till, utcOffsetSeconds: zon) {
-            guard NightFiles.size(stam) > 0, let fil = K18Nights.load(stam) else { continue }
-            if let ramar = fil.frames {
-                samlare.read(log: ramar)
-            } else if let data = fil.archive, let arkiv = try? DayArchive.decode(data) {
-                samlare.read(archive: arkiv)
-            }
-        }
-        let start: Int = Int(pass.start.timeIntervalSince1970.rounded(.down))
-        return samlare.series().records
-            .filter { (r: K18Record) -> Bool in r.time < start && PassHistory.bpmRange.contains(r.pulse) }
-            .map { (r: K18Record) -> PassHistory.Reading in PassHistory.Reading(time: r.time, bpm: r.pulse) }
-    }
 }

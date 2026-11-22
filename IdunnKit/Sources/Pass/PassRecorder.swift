@@ -70,6 +70,14 @@ public struct PassRecorder: Equatable, Sendable {
     /// Passets typ, i varje fas där det finns ett pass.
     public mutating func setKind(_ kind: PassKind?) {
         pass?.kind = kind
+        if kind != nil { pass?.customKind = nil }
+    }
+
+    /// BESLUT B150. Passets märkning: fast typ eller egen typ med egna ord, och anteckningen (`PassEdit.label`).
+    public mutating func setLabel(_ label: PassLabel) {
+        guard var p = pass else { return }
+        PassEdit.apply(label, to: &p)
+        pass = p
     }
 
     /// Avslutar efterperioden tidigt ("Klar"). Bara från `after`.
