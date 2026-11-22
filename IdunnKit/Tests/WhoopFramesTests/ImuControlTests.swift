@@ -397,11 +397,26 @@ final class ImuControlTests: XCTestCase {
         XCTAssertEqual(c.writeFailed(now: t0 + 12.1), [])
         XCTAssertEqual(c.phase, .on)
         XCTAssertFalse(c.wantsWrite)
-        // Ett fel i passets första start stoppar som för provet.
+        // Inte heller ett fel i passets första start: kön töms, fasen är på, och tystnaden startar om.
         var d = ImuControl(now: t0)
         _ = d.start(now: t0, owner: .pass)
         _ = d.tick(now: t0, canWrite: true)
-        XCTAssertEqual(d.writeFailed(now: t0 + 0.1), [.mark("imu-stopp skrivfel")])
+        XCTAssertEqual(d.writeFailed(now: t0 + 0.1), [])
+        XCTAssertEqual(d.phase, .on)
+        XCTAssertFalse(d.wantsWrite)
+        _ = d.watch(now: t0 + 1, linkUp: true)
+        XCTAssertEqual(d.watch(now: t0 + 12, linkUp: true).last, .mark("imu-omstart"))
+        // Felet för omstartens sista skrivning, som kommer när kön redan är tom, stoppar inte heller.
+        _ = d.tick(now: t0 + 12, canWrite: true)
+        _ = d.tick(now: t0 + 12.25, canWrite: true)
+        XCTAssertFalse(d.wantsWrite)
+        XCTAssertEqual(d.writeFailed(now: t0 + 12.4), [])
+        XCTAssertEqual(d.phase, .on)
+        // Provet stoppar som förut.
+        var e = ImuControl(now: t0)
+        _ = e.start(now: t0)
+        _ = e.tick(now: t0, canWrite: true)
+        XCTAssertEqual(e.writeFailed(now: t0 + 0.1), [.mark("imu-stopp skrivfel")])
     }
 
     func testEttNejStopparIntePassetsStröm() {

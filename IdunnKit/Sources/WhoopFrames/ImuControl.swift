@@ -359,10 +359,13 @@ public struct ImuControl: Sendable {
     public mutating func writeFailed(now: Date) -> [Action] {
         switch phase {
         case .starting, .on:
-            // BESLUT B147. En ny start under ett pass som inte gick att skriva: strömmen får gå som den går.
-            if restarting {
+            // BESLUT B147 · METOD M84. Ett skrivfel under ett pass stoppar aldrig strömmen: felet kommer efter att
+            // skrivningen gått (också efter den sista, när kön redan är tom), och kan höra till passets puls. Kön
+            // töms, fasen blir på, och tystnaden (`watch`) startar om.
+            if owner == .pass {
                 restarting = false
                 queue = []
+                phase = .on
                 return []
             }
             if lastStep == .startRaw || lastStep == .imuOn {

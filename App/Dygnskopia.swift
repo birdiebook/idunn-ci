@@ -85,6 +85,8 @@ final class DygnskopiaModell: ObservableObject {
     private var senasteFörsök: Date?
     /// BESLUT B148. När ett nyss stoppat pass har sin marginal efter stopp och rörelsen kan laddas upp.
     private var rörelseKlar: Date?
+    /// Telefonen har låsts upp minst en gång sedan appen startade.
+    private var upplåstEnGång = false
     private var bakgrund: UIBackgroundTaskIdentifier = .invalid
 
     private static let påNyckel: String = "dygnskopia.pa"
@@ -99,6 +101,11 @@ final class DygnskopiaModell: ObservableObject {
     func starta() {
         guard !startad, ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         startad = true
+        // Telefonen låstes upp: ett försök som stoppades före första upplåsningen görs nu.
+        NotificationCenter.default.addObserver(forName: UIApplication.protectedDataDidBecomeAvailableNotification,
+                                               object: nil, queue: .main) { _ in
+            Task { @MainActor in DygnskopiaModell.shared.synka() }
+        }
         if let data = try? Data(contentsOf: Self.filen), let f = try? JSONDecoder().decode(Fil.self, from: data) {
             fil = f
         }
@@ -141,8 +148,11 @@ final class DygnskopiaModell: ObservableObject {
         }
         läge.kopplad = true
         if läge.fel != nil, let f = senasteFörsök, Date().timeIntervalSince(f) < CoachRules.retrySeconds { return }
-        // Filerna är låsta tills telefonen låsts upp en gång efter en omstart.
-        guard UIApplication.shared.isProtectedDataAvailable else { return }
+        // Filerna är låsta tills telefonen låsts upp en gång efter en omstart (completeUntilFirstUserAuthentication),
+        // sedan går de att läsa också med skärmen låst. `isProtectedDataAvailable` blir falskt vid varje låsning,
+        // så den räcker bara som tecken på att telefonen låsts upp en gång.
+        if UIApplication.shared.isProtectedDataAvailable { upplåstEnGång = true }
+        guard upplåstEnGång else { return }
 
         läge.arbetar = true
         senasteFörsök = Date()

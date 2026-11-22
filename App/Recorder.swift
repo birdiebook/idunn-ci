@@ -207,6 +207,9 @@ final class Recorder: NSObject, ObservableObject {
     private var lastWriter: Writer = .fetch
     /// BESLUT B152. iOS väckte appen mitt i ett pass: arkiveringen, nätternas räkning och rådygnen väntar på `refresh`.
     private var startUppskjuten = false
+    /// BESLUT B147. Ett pass är i fasen running och vill ha rörelsen, och när den senast startades av passet.
+    private var passVillHaImu = false
+    private var passImuStartad = Date.distantPast
 
     override init() {
         super.init()
@@ -682,7 +685,7 @@ final class Recorder: NSObject, ObservableObject {
             // BESLUT B61. Passets realtidspuls (typ 40) och svaren på kommando 3.
             runPulse(pulse.receive(hel, now: f.time))
         }
-        if imu.isArmed || imu.wantsWrite { tickImu() }
+        if imu.isArmed || imu.wantsWrite || passVillHaImu { tickImu() }
         if pulse.isArmed { tickPulse() }
         guard fetching else { return }
         if let frame = stream.add(f), let actions = session?.receive(frame, now: f.time) { run(actions) }
@@ -782,6 +785,12 @@ final class Recorder: NSObject, ObservableObject {
 
     private func tickImu() {
         let now = Date()
+        // BESLUT B147 · METOD M84. Passet vill ha rörelsen men maskinen är av (startPassImu nekades medan ett stopp
+        // pågick, eller strömmen stoppades): starta igen, högst var 30:e sekund.
+        if passVillHaImu, imu.phase == .off, !imu.wantsWrite, now.timeIntervalSince(passImuStartad) >= 30 {
+            passImuStartad = now
+            runImu(imu.start(now: now, owner: .pass))
+        }
         // METOD M43. Tystnaden först: en misslyckad skrivning avbryter `runImu`.
         runImu(imu.watch(now: now, linkUp: band?.state == .connected))
         runImu(imu.tick(now: now, canWrite: imuCanWrite))
@@ -819,7 +828,7 @@ final class Recorder: NSObject, ObservableObject {
             imuArmedSaved = imu.isArmed
             defaults.set(imu.isArmed, forKey: Key.imuArmed)
         }
-        if imu.isArmed || imu.wantsWrite {
+        if imu.isArmed || imu.wantsWrite || passVillHaImu {
             if imuTimer == nil {
                 imuTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
                     self?.tickImu()
@@ -898,14 +907,21 @@ extension Recorder {
     /// Ett IMU-prov som redan går får gå klart (`ImuControl.start` svarar inget). En hämtning som pågår får gå
     /// klart först: kommandona väntar på den.
     func startPassImu() {
+        passVillHaImu = true
         let a: [ImuControl.Action] = imu.start(now: Date(), owner: .pass)
-        guard !a.isEmpty else { return }
+        if a.isEmpty {
+            // BESLUT B147. Ett stopp eller ett prov pågår: strömmen startas när maskinen är av (`tickImu`).
+            publishImu()
+            return
+        }
+        passImuStartad = Date()
         runImu(a)
         imuBatteryNote("start")
     }
 
     /// BESLUT B147. Passets Stopp (före efterperioden): strömmen stoppas, om passet äger den.
     func stopPassImu() {
+        passVillHaImu = false
         guard imu.owner == .pass, imu.phase == .starting || imu.phase == .on else { return }
         imuBatteryNote("stopp")
         runImu(imu.stop(now: Date(), reason: .pass))
