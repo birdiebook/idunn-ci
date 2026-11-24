@@ -10,8 +10,11 @@ import WhoopFrames
 /// - **Ingen natt sparad** för en dag som har dygnsfiler, eller en gammal
 ///   inspelning som började i dess fönster (B48): räkna.
 /// - **Nytt bygge:** räkningen kan ha ändrats, räkna om (som `NightSummary.load`).
+/// - **Ny data** (BESLUT B159, METOD M87): telefonen har fler minuter med K18 i nattens fönster än natten räknades
+///   på. Då räknas den om, oavsett vem som hämtade datan eller hur sent den kom.
 /// - **Pågående natt** (före klockan 12 på uppvakningsdagen): räknas fram till
-///   nu och märks preliminär, men högst var `preliminaryMinutes` minut.
+///   nu och märks preliminär, men bara medan appen är öppen (`awake`), och utan ny data högst var
+///   `preliminaryMinutes` minut. I bakgrunden väntar den till appen öppnas eller fönstret stänger.
 /// - **Färdig natt** som räknades preliminär: räknas om när fönstret passerats.
 /// - **Satt natt:** Whoop-appen kan synka en natt först timmar efter att den
 ///   mättes, och posten hamnar då i en senare dygnsfil. En natt räknas därför
@@ -48,9 +51,12 @@ public enum NightLedger {
         public var digest: NightDigest?
         /// METOD M55 · BESLUT B70. Ändringen natten räknades med (`nil`: ingen). Äldre poster saknar fältet.
         public var edit: SleepEdit?
+        /// BESLUT B159. Minuterna med K18 i fönstret som telefonen hade när natten räknades (`coveredMinutes`); `nil`:
+        /// okänt (äldre poster, eller statusen var inte läst).
+        public var coverage: Int?
 
         public init(build: String, wakeDay: WakeDay, computedAt: Date, preliminary: Bool, settled: Bool,
-                    digest: NightDigest?, edit: SleepEdit? = nil) {
+                    digest: NightDigest?, edit: SleepEdit? = nil, coverage: Int? = nil) {
             self.build = build
             self.wakeDayNumber = wakeDay.daysSince1970
             self.computedAt = computedAt
@@ -58,6 +64,7 @@ public enum NightLedger {
             self.settled = settled
             self.digest = digest
             self.edit = edit
+            self.coverage = coverage
         }
 
         public var wakeDay: WakeDay { WakeDay(daysSince1970: wakeDayNumber) }
@@ -73,6 +80,14 @@ public enum NightLedger {
     /// Fönstrets slut: kl 12 på uppvakningsdagen i zonen `utcOffsetSeconds`.
     public static func windowEnd(_ wakeDay: WakeDay, utcOffsetSeconds: Int) -> Date {
         Date(timeIntervalSince1970: Double(wakeDay.daysSince1970 * 86_400 + 43_200 - utcOffsetSeconds))
+    }
+
+    /// BESLUT B159 · METOD M87. Minuterna i nattens fönster (kl 18 kvällen före till kl 12, `NightWindow`) som har K18
+    /// i `minutes` (unix-minuter, `ListenerStatus.k18Minutes`).
+    public static func coveredMinutes(_ wakeDay: WakeDay, minutes: Set<Int>, utcOffsetSeconds: Int) -> Int {
+        let slut = Int(windowEnd(wakeDay, utcOffsetSeconds: utcOffsetSeconds).timeIntervalSince1970) / 60
+        let längd = (24 - NightWindow.eveningHour + NightWindow.morningHour) * 60
+        return (slut - längd..<slut).reduce(0) { (n: Int, m: Int) -> Int in minutes.contains(m) ? n + 1 : n }
     }
 
     /// Har natten satt sig, `settleHours` efter fönstrets slut?
@@ -108,14 +123,13 @@ public enum NightLedger {
     /// för en dag som tidigare räknades utan den. En dag vars ändring (`edits`, METOD M55) inte är den posten
     /// räknades med räknas om, oavsett klockan.
     ///
-    /// PLAN.md A3. `fetches` är när Idunns egna hämtningar slutade (sidofilernas `hämtning klar`/`hämtning stoppad`).
-    /// En hämtning som slutat efter att natten räknades, i en dygnsfil natten läser, räknar om den direkt: utan
-    /// Whoop-appen kommer nattens data med hämtningen, och den kan komma efter att natten räknats färdigt (en
-    /// hämtning dagen efter, efter att natten satt sig, lästes annars aldrig in). En pågående natt väntar då inte
-    /// in `preliminaryMinutes`.
+    /// BESLUT B159 · METOD M87. `minutes` är minuterna med K18 som telefonen har nu (`nil`: okänt). En natt vars fönster
+    /// har fler minuter än posten räknades på räknas om: en färdig natt direkt, en pågående när appen är öppen
+    /// (`awake`). Det ersätter regeln om hämtningarnas slut (A3) och synken ikapp (B158). `forced` räknas om oavsett.
     public static func jobs(dayStems: [String], recordingStems: [String] = [], entries: [WakeDay: Entry],
                             build: String, now: Date, utcOffsetSeconds: Int,
-                            edits: SleepEdits = SleepEdits(), fetches: [Date] = []) -> [Job] {
+                            edits: SleepEdits = SleepEdits(), minutes: Set<Int>? = nil, awake: Bool = true,
+                            forced: Set<WakeDay> = []) -> [Job] {
         let today = WakeDay(now, utcOffsetSeconds: utcOffsetSeconds)
         var ut: [Job] = []
         for w in candidates(dayStems: dayStems, recordingStems: recordingStems,
@@ -123,31 +137,22 @@ public enum NightLedger {
             let slut = windowEnd(w, utcOffsetSeconds: utcOffsetSeconds)
             let pågår: Bool = now < slut
             let satt: Bool = isSettled(w, now: now, utcOffsetSeconds: utcOffsetSeconds)
-            guard let e = entries[w], e.build == build, e.edit == edits[w] else {
+            guard let e = entries[w], e.build == build, e.edit == edits[w], !forced.contains(w) else {
                 ut.append(Job(wakeDay: w, preliminary: pågår, settled: satt))
                 continue
             }
-            let hämtat: Bool = fetches.contains { (t: Date) -> Bool in
-                t > e.computedAt && t <= now && reads(w, fetchedAt: t, settled: satt, utcOffsetSeconds: utcOffsetSeconds)
-            }
+            let nytt: Bool = minutes.map { (m: Set<Int>) -> Bool in
+                coveredMinutes(w, minutes: m, utcOffsetSeconds: utcOffsetSeconds) > (e.coverage ?? 0)
+            } ?? false
             if pågår {
-                if hämtat || now.timeIntervalSince(e.computedAt) >= preliminaryMinutes * 60 {
+                if awake && (nytt || now.timeIntervalSince(e.computedAt) >= preliminaryMinutes * 60) {
                     ut.append(Job(wakeDay: w, preliminary: true, settled: false))
                 }
-            } else if e.preliminary || (satt && !e.settled) || hämtat {
+            } else if e.preliminary || (satt && !e.settled) || nytt {
                 ut.append(Job(wakeDay: w, preliminary: false, settled: satt))
             }
         }
         return ut
-    }
-
-    /// PLAN.md A3. Läser natten för `w` dygnsfilen som en hämtning vid `t` hamnade i? Hämtningen sparas i filen för
-    /// det lokala datum den hördes (`DayLog.stem`); natten läser dygnet före och dagen själv, och dygnet efter när
-    /// den satt sig (`K18Days.stems`).
-    static func reads(_ w: WakeDay, fetchedAt t: Date, settled: Bool, utcOffsetSeconds: Int) -> Bool {
-        guard let dag = DayLog.day(ofStem: DayLog.stem(for: t, utcOffsetSeconds: utcOffsetSeconds)) else { return false }
-        let d: Int = dag.daysSince1970 - w.daysSince1970
-        return d == -1 || d == 0 || (d == 1 && settled)
     }
 
     /// BESLUT B48 · METOD M28. Räknar nätterna som är dags (`jobs`), nyaste
@@ -164,10 +169,10 @@ public enum NightLedger {
                                   entries: [WakeDay: Entry], build: String, now: Date, utcOffsetSeconds: Int,
                                   load: (String) -> K18Days.File?, save: (Entry) -> Void,
                                   sound: NightSound.Analyzer? = nil, edits: SleepEdits = SleepEdits(),
-                                  fetches: [Date] = []) -> Int {
+                                  minutes: Set<Int>? = nil, awake: Bool = true, forced: Set<WakeDay> = []) -> Int {
         let jobb: [Job] = jobs(dayStems: dayStems, recordingStems: recordingStems, entries: entries,
                                build: build, now: now, utcOffsetSeconds: utcOffsetSeconds, edits: edits,
-                               fetches: fetches)
+                               minutes: minutes, awake: awake, forced: forced)
         for j in jobb {
             let ändring: SleepEdit? = edits[j.wakeDay]
             let resultat: NightResult? = K18Days.night(wakeDay: j.wakeDay, includeNext: j.settled,
@@ -177,8 +182,11 @@ public enum NightLedger {
             let digest: NightDigest? = resultat.map { (r: NightResult) -> NightDigest in
                 NightDigest(r, preliminary: j.preliminary)
             }
+            let täckt: Int? = minutes.map { (m: Set<Int>) -> Int in
+                coveredMinutes(j.wakeDay, minutes: m, utcOffsetSeconds: utcOffsetSeconds)
+            }
             save(Entry(build: build, wakeDay: j.wakeDay, computedAt: now, preliminary: j.preliminary,
-                       settled: j.settled, digest: digest, edit: ändring))
+                       settled: j.settled, digest: digest, edit: ändring, coverage: täckt))
         }
         return jobb.count
     }

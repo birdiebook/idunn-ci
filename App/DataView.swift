@@ -61,7 +61,9 @@ struct DataView: View {
             onKopiaPå: { (på: Bool) -> Void in kopia.sätt(på: på) },
             dagbok: dagbok.låst ? nil : dagbok.dagbok,
             onKväll: { dagbok.öppnaKväll() },
-            onMorgon: { dagbok.öppnaMorgon() }
+            onMorgon: { dagbok.öppnaMorgon() },
+            räknar: recorder.computingNights,
+            onRäknaOm: { recorder.recomputeRecentNights() }
         )
         .onAppear { recorder.refresh() }
         .fileImporter(
@@ -143,6 +145,9 @@ struct DataScreen: View {
     var dagbok: Journal?
     var onKväll: () -> Void = {}
     var onMorgon: () -> Void = {}
+    /// BESLUT B159. Räkna om nätterna: reserven om den automatiska regeln missar något. `nil` = ingen knapp.
+    var räknar = false
+    var onRäknaOm: (() -> Void)? = nil
 
     /// METOD M28. Nätterna ur K18, för kontrollen.
     private var k18Nights: [NightSummary] {
@@ -186,12 +191,31 @@ struct DataScreen: View {
 
             // BESLUT B40. Listan över Idunns nätter, för kontroll: vardagen når
             // en natt genom pilarna och svepet på Morgon och ett tryck i trendvyn (BESLUT B82).
-            if !summaries.isEmpty {
+            if !summaries.isEmpty || onRäknaOm != nil {
                 Section {
-                    NavigationLink {
-                        NightsList(summaries: summaries)
-                    } label: {
-                        Label("Nätter", systemImage: "moon.stars")
+                    if !summaries.isEmpty {
+                        NavigationLink {
+                            NightsList(summaries: summaries)
+                        } label: {
+                            Label("Nätter", systemImage: "moon.stars")
+                        }
+                    }
+                    // BESLUT B159. Nätterna räknas om av sig själva när ny data kommit; knappen tvingar de tre senaste.
+                    if let onRäknaOm {
+                        Button {
+                            onRäknaOm()
+                        } label: {
+                            HStack {
+                                Label("Räkna om nätterna", systemImage: "arrow.clockwise")
+                                Spacer()
+                                if räknar { ProgressView() }
+                            }
+                        }
+                        .disabled(räknar)
+                    }
+                } footer: {
+                    if onRäknaOm != nil {
+                        Text("Nätterna räknas om av sig själva när ny data kommer från bandet. Knappen räknar om de tre senaste ändå.")
                     }
                 }
             }

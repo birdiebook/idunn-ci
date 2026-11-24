@@ -84,14 +84,11 @@ public enum RecordingLog {
         /// BESLUT B157. iOS sa till att appen avslutas (kommer inte när en app i bakgrunden stängs tyst).
         case terminating = "avslutas"
         /// BESLUT B158. En synk som Idunn hörde kom ikapp (`ListenerStatus.lastCatchUp`): bandet skickade det som inte
-        /// synkats på en stund. Texten bär antalet K18-sekunder och hur sent den äldsta hördes, i minuter.
+        /// synkats på en stund. Texten bär antalet K18-sekunder och hur sent den äldsta hördes, i minuter. Bara för
+        /// loggen: nätterna räknas om efter ny data (BESLUT B159), inte efter ordet.
         case syncCaughtUp = "synk ikapp"
     }
 
-    /// PLAN.md A3. Orden för en hämtnings slut, som `NightLedger` räknar om nätter efter. BESLUT B158: också en synk
-    /// som kom ikapp, för då kan nattens data ha kommit efter att natten räknades.
-    public static let fetchEnds: Set<String> = [Link.fetchComplete.rawValue, Link.fetchStopped.rawValue,
-                                                Link.syncCaughtUp.rawValue]
 
     public struct LinkEntry: Equatable, Sendable {
         public var time: Date

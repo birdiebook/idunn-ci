@@ -264,9 +264,7 @@ final class ListenerStatusTests: XCTestCase {
         XCTAssertEqual(s.lastCatchUpRecords, 1)
     }
 
-    func testSynkIkappRäknarOmNättersomEnHämtning() {
-        // K18Nights.fetchEnds läser orden i fetchEnds ur sidofilen; NightLedger räknar om efter dem.
-        XCTAssertTrue(RecordingLog.fetchEnds.contains(RecordingLog.Link.syncCaughtUp.rawValue))
+    func testSynkIkappSkrivsOchLäsesISidofilen() {
         let t = Date(timeIntervalSince1970: 1_795_500_000)
         var fil = RecordingLog.header(utcOffsetSeconds: 3600)
         fil.append(RecordingLog.link(.syncCaughtUp, text: "600 K18-sekunder, äldsta 480 min sent", at: t))

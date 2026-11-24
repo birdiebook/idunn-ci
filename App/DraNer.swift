@@ -7,14 +7,19 @@ import SwiftUI
 /// `laddar` är arbetet som pågår hos den som äger datan. Utandningen är en kort kvittens på draget (BESLUT B139):
 /// minst `minst` sekunder, så att den hinner andas ut, och högst `längst`. En hämtning från bandet kan ta minuter, och
 /// hur långt den kommit står på sidan, inte i kulan.
+///
+/// BESLUT B159. Med `kvitto` står läget i luckan en stund efter utandningen ("Bandet anslutet · hört 08:04 · allt
+/// räknat"): draget räknar inget själv, det prövar samma regel som när appen öppnas, och kvittot säger vad den såg.
 struct DraNer<Innehåll: View>: View {
     let laddar: Bool
     let ladda: (() -> Void)?
+    let kvitto: String?
     let innehåll: () -> Innehåll
 
-    init(laddar: Bool, ladda: (() -> Void)?, @ViewBuilder innehåll: @escaping () -> Innehåll) {
+    init(laddar: Bool, ladda: (() -> Void)?, kvitto: String? = nil, @ViewBuilder innehåll: @escaping () -> Innehåll) {
         self.laddar = laddar
         self.ladda = ladda
+        self.kvitto = kvitto
         self.innehåll = innehåll
     }
 
@@ -25,6 +30,8 @@ struct DraNer<Innehåll: View>: View {
     // BESLUT B139 · BESLUT B140. Kort: minst en utandning (`Andning.utandning`), högst 1,5 s.
     static var minst: Double { Andning.utandning }
     static var längst: Double { 1.5 }
+    /// BESLUT B159. Så länge kvittot står kvar efter utandningen, i sekunder. **antagande**: en rad hinner läsas.
+    static var kvittotsTid: Double { 2.5 }
 
     /// Hur långt innehållet är draget under sin överkant (0 i vila).
     @State private var drag: CGFloat = 0
@@ -37,6 +44,8 @@ struct DraNer<Innehåll: View>: View {
     @State private var släppt = Date.distantPast
     /// `laddar` som det är just nu, läsbart inifrån väntan.
     @State private var pågår = false
+    /// BESLUT B159. Kvittot visas i luckan i stället för kulan.
+    @State private var läser = false
 
     var body: some View {
         ScrollView {
@@ -81,14 +90,31 @@ struct DraNer<Innehåll: View>: View {
                 try? await Task.sleep(for: .seconds(0.1))
                 kvar -= 0.1
             }
-            withAnimation(.easeInOut(duration: 0.25)) { visar = false }
+            if kvitto != nil, !Task.isCancelled {
+                withAnimation(.easeInOut(duration: 0.25)) { läser = true }
+                try? await Task.sleep(for: .seconds(Self.kvittotsTid))
+            }
+            withAnimation(.easeInOut(duration: 0.25)) {
+                visar = false
+                läser = false
+            }
         }
     }
 
     /// Luckan ovanför innehållet: inandningen följer draget, utandningen sin klocka.
     @ViewBuilder
     private var luckan: some View {
-        if visar {
+        if visar, läser, let kvitto {
+            Text(kvitto)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity)
+                .frame(height: max(Self.rad, drag))
+                .allowsHitTesting(false)
+                .transition(.opacity)
+        } else if visar {
             TimelineView(.animation) { tid in
                 let fas: Double = min(1, max(0, tid.date.timeIntervalSince(släppt) / Andning.utandning))
                 Andning(andel: 1, ut: fas)
