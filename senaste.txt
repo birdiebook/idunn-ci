@@ -1,20 +1,7 @@
-28cece3ce2fd0185f2dcba87fea47e59009e0ac0 spegel 2026-11-24T08:08:02Z run 45352921755
+4869964f80de24eb0a38e6ae7d4ba801d19a5063 spegel 2026-11-24T16:03:21Z run 45432374757
 == swift-release
-GRÖNT: 1090 test, 0 fel, 63 s i testerna, bygget 127 s
-Långsammast (av 1090):
-      6.3 s  DemoDataTests.testIdunnsHudtempLiggerUnderWhoopsOchSaknasPåNätterUnderMinstaTäckning
-      2.3 s  NightSoundTests.testNattenLäserSittLjudNärDenRäknasOchSammanfattningenBärDet
-      2.1 s  K18DaysTests.testEnAnnanNattIFilernaPåverkarInteDennaNatt
-      2.0 s  K18InspelningarTests.testEnSekundIBådeInspelningOchDygnRäknasEnGång
-      2.0 s  SleepEditTests.testComputeDueRäknarDenÄndradeNattenOchÅterställer
-      1.9 s  K18DaysTests.testEttNyttByggeRäknarOmEnNattUrArkivetMedDetNyaRäknesättet
-      1.8 s  NattvalVaktTests.testEnNattUtanDygnetEfterSaknarInteLager
-      1.8 s  K18DaysTests.testEttDygnSomArkivOchEttSomRådygnGerSammaNatt
-      1.7 s  K18DaysTests.testNattenUrArkivenÄrSammaNattSomUrDygnsfilerna
-      1.4 s  NightSoundTests.testAnalysenLämnarSammanfattningenFörExportenTillAppen
-      1.2 s  PahittatBandTests.testHämtningDagenEfterFinnsMedNärNattenSattSig
-      1.2 s  PahittatBandTests.testAppenDödadMittIHämtningenTasUppNästaGång
-      1.2 s  DemoDataTests.testSammaSeedGerSammaNatt
-      1.1 s  NattvalVaktTests.testEnK18NattSomBandetHördeFörLiteVikerSigFörInspelningenSomLågPåHelaNatten
-      1.1 s  NattvalVaktTests.testEnNattMedK18GerLagerOchVäljsFöreInspelningen
+RÖTT: ingen sammanräkning i loggen (kompilerade det?)
+/__w/idunn-ci/idunn-ci/IdunnKit/Tests/PassTests/PassManualTests.swift:8:76: error: '%' is unavailable: For floating point numbers use truncatingRemainder instead
+|                                                                            `- error: '%' is unavailable: For floating point numbers use truncatingRemainder instead
+error: fatalError
 

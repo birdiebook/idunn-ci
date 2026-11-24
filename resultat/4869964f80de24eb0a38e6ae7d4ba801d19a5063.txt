@@ -1,0 +1,7 @@
+4869964f80de24eb0a38e6ae7d4ba801d19a5063 spegel 2026-11-24T16:03:21Z run 45432374757
+== swift-release
+RÖTT: ingen sammanräkning i loggen (kompilerade det?)
+/__w/idunn-ci/idunn-ci/IdunnKit/Tests/PassTests/PassManualTests.swift:8:76: error: '%' is unavailable: For floating point numbers use truncatingRemainder instead
+|                                                                            `- error: '%' is unavailable: For floating point numbers use truncatingRemainder instead
+error: fatalError
+
