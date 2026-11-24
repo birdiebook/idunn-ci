@@ -5,7 +5,8 @@ import XCTest
 // BESLUT B158 · METOD M85. Ett pass som läggs till för hand i efterhand. Allt nedan är påhittat (CLAUDE.md §Dataregeln).
 
 /// Nu: en hel minut, och en hel 5-minutersgräns.
-private let nu = Date(timeIntervalSince1970: 1_800_000_000 - 1_800_000_000 % 300)
+private let nuSekunder: Int = 1_800_000_000 - 1_800_000_000 % 300
+private let nu = Date(timeIntervalSince1970: TimeInterval(nuSekunder))
 
 private func gmt() -> Calendar {
     var k = Calendar(identifier: .gregorian)

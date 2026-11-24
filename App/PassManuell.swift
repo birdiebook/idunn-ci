@@ -40,6 +40,14 @@ struct PassManuellBlad: View {
     }
     private var kanLäggas: Bool { val.harTyp && fel == nil }
 
+    /// Raden under hjulen: felet, eller längden och var pulsen kommer ifrån. Egen egenskap, så att typkontrollen
+    /// inte får ett långt uttryck i vyn.
+    private var förklaring: String {
+        if let f: PassManual.Problem = fel { return f.message }
+        let längd: String = PassFormat.short(stopp.timeIntervalSince(start))
+        return "Längd " + längd + ". Pulsen fylls ur bandets historik, nu eller när bandet har lämnat den."
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -59,8 +67,7 @@ struct PassManuellBlad: View {
                              minuter: $stoppMinuter)
                 }
 
-                Text(fel?.message ?? ("Längd " + PassFormat.short(stopp.timeIntervalSince(start))
-                                      + ". Pulsen fylls ur bandets historik, nu eller när bandet har lämnat den."))
+                Text(förklaring)
                     .font(.footnote)
                     .foregroundStyle(Tema.dim)
 
