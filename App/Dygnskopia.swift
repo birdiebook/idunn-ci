@@ -6,7 +6,7 @@ import WhoopFrames
 
 /// BESLUT B143 · METOD M82
 /// Utvecklingskopian: när telefonen är kopplad till coachen (B127) laddar appen av sig själv upp varje färdigt dygns
-/// arkiv (`dygn-<datum>.arkiv`, METOD M34) till användaren egen databas, nyast först, ett dygn per anrop, och ett dygn
+/// arkiv (och dagens dygn som det ser ut nu, BESLUT B160) (`dygn-<datum>.arkiv`, METOD M34) till användaren egen databas, nyast först, ett dygn per anrop, och ett dygn
 /// på nytt bara när dess arkiv ändrats. Kopplingen och sändaren är coachens: nätet nås bara genom `CoachSändare`.
 ///
 /// - **När:** när coachen skickar (`CoachModell` anropar `synka()` efter en ändring och när appen öppnas), bara
@@ -85,6 +85,8 @@ final class DygnskopiaModell: ObservableObject {
     private var senasteFörsök: Date?
     /// BESLUT B148. När ett nyss stoppat pass har sin marginal efter stopp och rörelsen kan laddas upp.
     private var rörelseKlar: Date?
+    /// BESLUT B160. När dagens dygn senast kom fram.
+    private var idagSkickat: Date?
     /// Telefonen har låsts upp minst en gång sedan appen startade.
     private var upplåstEnGång = false
     private var bakgrund: UIBackgroundTaskIdentifier = .invalid
@@ -198,6 +200,7 @@ final class DygnskopiaModell: ObservableObject {
                 }
                 if fel != nil { break }
             }
+            if fel == nil, self.läge.på { fel = await self.synkaIdag(c) }
             if fel == nil, self.läge.på { fel = await self.synkaRörelsen(c) }
             self.läge.kopplad = CoachNyckelring.läs() != nil
             self.läge.fel = fel
@@ -214,6 +217,46 @@ final class DygnskopiaModell: ObservableObject {
                 }
             }
         }
+    }
+
+    /// BESLUT B160 · METOD M82. Dagens dygn som det ser ut nu, högst var `DayCopyRules.todaySeconds`: arkivet byggs ur
+    /// dagens rådygn (utan rörelsen i 100 Hz, som de färdiga) och skrivs över i hinken med samma namn. Det märks inte
+    /// i loggen, så det färdiga arkivet laddas upp som vanligt när dygnet är slut.
+    private func synkaIdag(_ c: CoachConfig) async -> String? {
+        let nu = Date()
+        if let s = idagSkickat, nu.timeIntervalSince(s) < DayCopyRules.todaySeconds { return nil }
+        let byggt: (dag: String, data: Data)? = await Task.detached(priority: .utility) {
+            () -> (dag: String, data: Data)? in
+            Self.idagArkiv(nu)
+        }.value
+        guard let byggt, let anrop = CoachCall.dayCopy(config: c, day: byggt.dag, archive: byggt.data) else { return nil }
+        let svar: CoachReply = await CoachSändare.skicka(anrop)
+        switch svar {
+        case .copied(let dygn, let mb, let tak):
+            idagSkickat = nu
+            fil.dygn = dygn
+            fil.megabyte = mb
+            fil.tak = tak
+            fil.senast = nu
+            spara()
+            läge.dygn = dygn
+            läge.megabyte = mb
+            läge.tak = tak
+            läge.senast = nu
+            return nil
+        default:
+            if svar.isUnknownDevice { CoachModell.shared.kopplaFrån() }
+            return Self.text(svar)
+        }
+    }
+
+    /// BESLUT B160. Dagens arkiv ur rådygnet, utan rörelsen i 100 Hz, och dagens datum. `nil` när dagen saknar filer.
+    /// Körs utanför huvudkön: ett rådygn är tiotals MB.
+    nonisolated private static func idagArkiv(_ nu: Date) -> (dag: String, data: Data)? {
+        let stam: String = DayLog.stem(for: nu, utcOffsetSeconds: TimeZone.current.secondsFromGMT(for: nu))
+        guard let dag = DayLog.day(ofStem: stam), let d = NightFiles.dayData(stam) else { return nil }
+        let arkiv: DayArchive = DayArchive.build(day: dag, sidecar: d.pulse, frames: d.frames)
+        return (String(stam.dropFirst(DayLog.prefix.count)), PassMotion.withoutMotion(arkiv).encode())
     }
 
     /// BESLUT B148. Arkivet som det skickas: utan rörelsen i 100 Hz. Ett arkiv utan rörelse, eller ett som inte går

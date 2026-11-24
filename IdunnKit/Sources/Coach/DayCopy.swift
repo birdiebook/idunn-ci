@@ -7,6 +7,8 @@ public enum DayCopyRules {
     /// **antagande**. Största arkiv som mottagaren tar emot.
     public static let maxBytes: Int = 20 * 1024 * 1024
     public static let path: String = "/functions/v1/idunn-dygn"
+    /// BESLUT B160 · METOD M82. **antagande**. Dagens dygn laddas upp högst så här ofta (sekunder).
+    public static let todaySeconds: TimeInterval = 600
 
     /// Ett datum `yyyy-MM-dd`: fyra, två och två siffror, månad 1–12 och dag 1–31.
     public static func isValidDay(_ day: String) -> Bool {
