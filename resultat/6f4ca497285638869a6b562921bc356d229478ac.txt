@@ -1,0 +1,20 @@
+6f4ca497285638869a6b562921bc356d229478ac spegel 2026-11-24T16:28:42Z run 45436881047
+== swift-release
+GRÖNT: 1100 test, 0 fel, 44 s i testerna, bygget 93 s
+Långsammast (av 1100):
+      3.7 s  DemoDataTests.testIdunnsHudtempLiggerUnderWhoopsOchSaknasPåNätterUnderMinstaTäckning
+      1.6 s  NightSoundTests.testNattenLäserSittLjudNärDenRäknasOchSammanfattningenBärDet
+      1.5 s  K18DaysTests.testEnAnnanNattIFilernaPåverkarInteDennaNatt
+      1.4 s  SleepEditTests.testComputeDueRäknarDenÄndradeNattenOchÅterställer
+      1.4 s  K18InspelningarTests.testEnSekundIBådeInspelningOchDygnRäknasEnGång
+      1.4 s  K18DaysTests.testEttNyttByggeRäknarOmEnNattUrArkivetMedDetNyaRäknesättet
+      1.3 s  K18DaysTests.testEttDygnSomArkivOchEttSomRådygnGerSammaNatt
+      1.2 s  NattvalVaktTests.testEnNattUtanDygnetEfterSaknarInteLager
+      1.2 s  K18DaysTests.testNattenUrArkivenÄrSammaNattSomUrDygnsfilerna
+      1.0 s  NightSoundTests.testAnalysenLämnarSammanfattningenFörExportenTillAppen
+      0.8 s  K18DaysTests.testReservzonenGällerBaraNärSidofilerSaknas
+      0.8 s  PahittatBandTests.testHämtningDagenEfterFinnsMedNärNattenSattSig
+      0.8 s  NattvalVaktTests.testEnNattMedK18GerLagerOchVäljsFöreInspelningen
+      0.8 s  NattvalVaktTests.testEnK18NattSomBandetHördeFörLiteVikerSigFörInspelningenSomLågPåHelaNatten
+      0.8 s  PahittatBandTests.testEnHelNattHämtasPåMorgonenOchBlirSammaNattSomFacit
+
