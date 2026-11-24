@@ -14,12 +14,27 @@ public struct ListenerStatus: Equatable, Sendable {
     /// Telefonens tid när Whoops senaste synk avslutades: HISTORY_COMPLETE
     /// (typ 49, i2 = 3) på `…0005`, PROTOKOLL_W5 §7.1.
     public private(set) var lastSync: Date?
+    /// BESLUT B158. Telefonens tid när en synk som kom ikapp blev klar: en färdig synk där någon K18-post hördes
+    /// minst `catchUpLag` efter att den mättes. Bandet hade då inte synkat på en stund, och nattens data kan ha kommit
+    /// efter att natten räknades.
+    public private(set) var lastCatchUp: Date?
+    /// BESLUT B158. K18-poster i den synken och den största eftersläpningen (sekunder): tider och antal, inga värden.
+    public private(set) var lastCatchUpRecords = 0
+    public private(set) var lastCatchUpLag: Double = 0
     /// Unix-minuter (`tid / 60`) som har minst en K18-post.
     public private(set) var k18Minutes: Set<Int> = []
     /// Ramar vars CRC32 inte stämde. De räknas inte med.
     public private(set) var badChecksums = 0
 
     private var stream = FrameAssembly.Stream()
+    /// BESLUT B158. Sedan förra färdiga synken: K18-poster och den största eftersläpningen.
+    private var syncRecords = 0
+    private var syncLag: Double = 0
+
+    /// BESLUT B158 · METOD M87. En synk är ikapp när en post hörs så här långt (sekunder) efter att den mättes. Mätt
+    /// 2026-11-24 i ett dygn: Whoop-appen synkar var 10:e minut och den största eftersläpningen i en vanlig synk var
+    /// 10,3 minuter; efter en natt utan anslutning 8,5 timmar.
+    public static let catchUpLag: Double = 30 * 60
 
     /// En post med en tid längre fram än så här (sekunder efter notisen) är
     /// ett fel i bandets klocka och räknas inte. **antagande**.
@@ -35,7 +50,7 @@ public struct ListenerStatus: Equatable, Sendable {
     /// Strömmens halvfärdiga ramar räknas inte som skillnad.
     public static func == (a: ListenerStatus, b: ListenerStatus) -> Bool {
         a.lastK18Heard == b.lastK18Heard && a.lastK18Record == b.lastK18Record
-            && a.lastSync == b.lastSync && a.k18Minutes == b.k18Minutes
+            && a.lastSync == b.lastSync && a.lastCatchUp == b.lastCatchUp && a.k18Minutes == b.k18Minutes
             && a.badChecksums == b.badChecksums
     }
 
@@ -56,6 +71,13 @@ public struct ListenerStatus: Equatable, Sendable {
         case Int(HistoryMeta.packetType):
             if frame.crc32OK, HistoryMeta(inner: frame.inner) == .complete {
                 lastSync = max(lastSync ?? frame.time, frame.time)
+                if syncLag >= Self.catchUpLag {
+                    lastCatchUp = max(lastCatchUp ?? frame.time, frame.time)
+                    lastCatchUpRecords = syncRecords
+                    lastCatchUpLag = syncLag
+                }
+                syncRecords = 0
+                syncLag = 0
             }
         default:
             break
@@ -67,6 +89,8 @@ public struct ListenerStatus: Equatable, Sendable {
         let t = Double(r.time)
         guard t <= heard.timeIntervalSince1970 + Self.futureSlack else { return }
         k18Minutes.insert(r.time / 60)
+        syncRecords += 1
+        syncLag = max(syncLag, heard.timeIntervalSince1970 - t)
         let at = Date(timeIntervalSince1970: t)
         lastK18Record = max(lastK18Record ?? at, at)
         if k18Minutes.count > 8000, let nyaste = lastK18Record {
@@ -82,6 +106,7 @@ public struct ListenerStatus: Equatable, Sendable {
         lastK18Heard = Self.later(lastK18Heard, o.lastK18Heard)
         lastK18Record = Self.later(lastK18Record, o.lastK18Record)
         lastSync = Self.later(lastSync, o.lastSync)
+        lastCatchUp = Self.later(lastCatchUp, o.lastCatchUp)
         k18Minutes.formUnion(o.k18Minutes)
         badChecksums += o.badChecksums
     }

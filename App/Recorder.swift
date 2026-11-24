@@ -686,7 +686,10 @@ final class Recorder: NSObject, ObservableObject {
         let f = RawFrame(time: Date(), characteristic: uuid.uuidString, bytes: [UInt8](data))
         save(f)
         liveTally.add(f)
+        let ikappFöre: Date? = liveStatus.lastCatchUp
         liveStatus.add(f)
+        // BESLUT B158. Bandet skickade det som inte synkats på en stund: natten kan ha räknats innan den kom.
+        if liveStatus.lastCatchUp != ikappFöre, !fetching { syncCaughtUp() }
         publishSoon(f.time)
         // PLAN.md A3. En notis väcker appen: dags att hämta?
         considerAutoFetch()
@@ -701,6 +704,15 @@ final class Recorder: NSObject, ObservableObject {
         if pulse.isArmed { tickPulse() }
         guard fetching else { return }
         if let frame = stream.add(f), let actions = session?.receive(frame, now: f.time) { run(actions) }
+    }
+
+    /// BESLUT B158 · METOD M87. En synk som Idunn hörde kom ikapp. Ordet i sidofilen räknar om natten
+    /// (`NightLedger.jobs(fetches:)`), nu eller när appen öppnas om iOS hinner stänga den först.
+    private func syncCaughtUp() {
+        let minuter = Int(liveStatus.lastCatchUpLag / 60)
+        logEvent(.syncCaughtUp, text: "\(liveStatus.lastCatchUpRecords) K18-sekunder, äldsta \(minuter) min sent")
+        _ = frameFile?.sync()
+        reloadSummaries()
     }
 
     // MARK: Hämtningen
