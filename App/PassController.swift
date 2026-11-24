@@ -177,6 +177,22 @@ final class PassController: ObservableObject {
         }
     }
 
+    /// BESLUT B158 · METOD M85. Lägger till ett pass för hand i efterhand, sparat som ett färdigt pass märkt som tillagt för
+    /// hand. Reglerna prövas här också (`PassManual.problem`); bryts de visas skälet. Pulsen fylls ur bandets historik av
+    /// samma påfyllnad som för varje sparat pass med luckor (`fillFromHistory`, BESLUT B117): finns ingen än väntar passet.
+    func läggTillManuellt(_ label: PassLabel, start: Date, stopp: Date) {
+        var passen: [Pass] = saved
+        if let p = state.pass { passen.append(p) }
+        if let fel = PassManual.problem(start: start, stop: stopp, now: Date(), existing: passen) {
+            problem = fel.message
+            return
+        }
+        let p: Pass = PassManual.pass(start: start, stop: stopp, label: label)
+        persist(p)
+        saved = Self.newestFirst(saved.filter { $0.id != p.id } + [p])
+        fillFromHistory()
+    }
+
     /// "Klar": avslutar efterperioden och sparar direkt.
     func finish() {
         let före = state.phase

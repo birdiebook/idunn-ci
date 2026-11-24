@@ -2,7 +2,8 @@
 // (`forslag-lista`) och bladet där typen väljs, med en gissad typ (`forslag-blad`) och utan (`forslag-blad-utan-typ`).
 // Märkningen (BESLUT B150, METOD M85): förslagsbladet med Annat och flyttade tider (`forslag-blad-annat`), ett sparat
 // pass med egna ord och anteckning (`pass-egen-typ`), bladet Ändra (`pass-andra`) och bladet efter Stopp
-// (`pass-efter-markning`).
+// (`pass-efter-markning`). Pass för hand i efterhand (BESLUT B158): bladet `pass-manuell`, med fel `pass-manuell-fel`, och det
+// sparade passet `pass-manuell-sparat`.
 //
 // DATAN ÄR PÅHITTAD: två förslag och ett sparat pass relativt en fast tid. Riktig hälsodata får aldrig in här —
 // CLAUDE.md §Dataregeln. Egen klass och eget ritverktyg, som IdunnProvUte.
@@ -55,9 +56,9 @@ final class IdunnProvForslag: XCTestCase {
         try fånga(PassScreen(phase: .idle, pass: nil, now: nu, saved: [sparat()], förslag: [bastu, utanTyp]),
                   namn: "forslag-lista", höjd: 1_000)
         try fånga(FörslagBlad(förslag: bastu, nu: nu, läggTill: { _ in }, taBort: {})
-                    .background(Tema.bg), namn: "forslag-blad", höjd: 700)
+                    .background(Tema.bg), namn: "forslag-blad", höjd: 1_400)
         try fånga(FörslagBlad(förslag: utanTyp, nu: nu, läggTill: { _ in }, taBort: {})
-                    .background(Tema.bg), namn: "forslag-blad-utan-typ", höjd: 700)
+                    .background(Tema.bg), namn: "forslag-blad-utan-typ", höjd: 1_400)
     }
 
     // MARK: Märkningen (BESLUT B150, METOD M85)
@@ -87,7 +88,7 @@ final class IdunnProvForslag: XCTestCase {
         XCTAssertEqual(blivande.suggested?.start, utanTyp.start)
         try fånga(FörslagBlad(förslag: utanTyp, nu: nu, läggTill: { _ in }, taBort: {}, förhand: förhand,
                               förval: val, tider: tider)
-                    .background(Tema.bg), namn: "forslag-blad-annat", höjd: 1_150)
+                    .background(Tema.bg), namn: "forslag-blad-annat", höjd: 1_550)
 
         // Det sparade passet med egna ord och anteckning, och bladet Ändra på det.
         let sparat: Pass = PassSuggestions.pass(from: utanTyp, kind: nil, readings: prov, label: val.label,
@@ -96,7 +97,7 @@ final class IdunnProvForslag: XCTestCase {
         // BESLUT B153 · METOD M86. Samma pass med pulsen före och efter, uttonad ut till kanterna.
         try fånga(NavigationStack { PassDetail(pass: sparat, zonMaxpuls: 190, omkring: prov) },
                   namn: "pass-omkring", höjd: 1_100)
-        try fånga(PassAndraBlad(pass: sparat, nu: nu, spara: { _, _, _ in }), namn: "pass-andra", höjd: 1_150)
+        try fånga(PassAndraBlad(pass: sparat, nu: nu, spara: { _, _, _ in }), namn: "pass-andra", höjd: 1_550)
 
         // Bladet efter Stopp: typerna med Annat… och anteckningen.
         var pågår: Pass = sparat
@@ -107,6 +108,40 @@ final class IdunnProvForslag: XCTestCase {
         let efterNu: Date = (pågår.stop ?? nu).addingTimeInterval(200)
         try fånga(PassScreen(phase: .after, pass: pågår, now: efterNu, saved: []), namn: "pass-efter-markning",
                   höjd: 1_500)
+    }
+
+    // MARK: Pass för hand i efterhand (BESLUT B158)
+
+    /// Bladet med en bastu vald och tider som går (`pass-manuell`), med en tid som inte går och raden som säger varför
+    /// (`pass-manuell-fel`), och det sparade passet med den grå raden "Tillagt i efterhand" (`pass-manuell-sparat`).
+    func testRitaManuell() throws {
+        let finns: [Pass] = [sparat()]
+        let a: Date = nu.addingTimeInterval(-5_400)
+        let b: Date = nu.addingTimeInterval(-2_700)
+        let val = PassMarkningsval(typ: .typ(.bastu), anteckning: "Efter golfen")
+        XCTAssertNil(PassManual.problem(start: a, stop: b, now: nu, existing: finns))
+        try fånga(PassManuellBlad(nu: nu, finns: finns, läggTill: { _, _, _ in }, avbryt: {}, förval: val,
+                                  tider: (start: a, stopp: b))
+                    .background(Tema.bg), namn: "pass-manuell", höjd: 1_500)
+
+        // Stopp efter nu: knappen är grå och raden säger varför.
+        let framåt: Date = nu.addingTimeInterval(1_800)
+        XCTAssertEqual(PassManual.problem(start: a, stop: framåt, now: nu, existing: finns), .stopInFuture)
+        try fånga(PassManuellBlad(nu: nu, finns: finns, läggTill: { _, _, _ in }, avbryt: {}, förval: val,
+                                  tider: (start: a, stopp: framåt))
+                    .background(Tema.bg), namn: "pass-manuell-fel", höjd: 1_500)
+
+        // Det sparade passet, med påhittad puls ur "bandets historik".
+        let från: Int = Int(a.timeIntervalSince1970) - 60
+        let till: Int = Int(b.timeIntervalSince1970) + 700
+        let poster: [PassHistory.Reading] = (från...till).map { (t: Int) -> PassHistory.Reading in
+            PassHistory.Reading(time: t, bpm: 95 + Int((20 * sin(Double(t - från) / 200)).rounded()))
+        }
+        let pass: Pass = PassManual.pass(start: a, stop: b, label: val.label, readings: poster)
+        XCTAssertEqual(pass.addedByHand, true)
+        XCTAssertFalse(pass.samples.isEmpty)
+        try fånga(NavigationStack { PassDetail(pass: pass, zonMaxpuls: 190) }, namn: "pass-manuell-sparat",
+                  höjd: 1_100)
     }
 
     // MARK: Ritverktyget
@@ -124,7 +159,7 @@ final class IdunnProvForslag: XCTestCase {
         fönster.isHidden = false
         vc.view.frame = fönster.bounds
         vc.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(1))
+        RunLoop.main.run(until: Date().addingTimeInterval(1.5))
         vc.view.layoutIfNeeded()
 
         let format = UIGraphicsImageRendererFormat()

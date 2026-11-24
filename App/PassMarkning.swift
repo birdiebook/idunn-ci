@@ -111,7 +111,10 @@ struct PassMarkningVy: View {
     }
 }
 
-/// Start och slut med knappar för −5, −1, +1 och +5 minuter, inom gränserna (`PassEdit.moved`).
+/// BESLUT B150 · BESLUT B158. Start och slut i nattens tidshjul (`Tidshjul`, METOD M55), ett under det andra som i
+/// bladet Ändra på Natten. Hjulet ger ett klockslag; `PassClock` gör det till den tid med det klockslaget som ligger
+/// närmast tiden som var, och `PassEdit.set` håller den inom gränserna (högst en timme utanför, aldrig efter nu,
+/// minst en minut). Allt i ren SwiftUI utom hjulen, som provet fångar ur ett riktigt fönster.
 struct PassTiderVy: View {
     @Binding var start: Date
     @Binding var stopp: Date
@@ -119,48 +122,27 @@ struct PassTiderVy: View {
     /// Förslagets eller passets tider när bladet öppnades: en flyttad tid visar varifrån den kom.
     var ursprung: (start: Date, stopp: Date)?
 
+    private func hjul(_ kant: PassEdit.Edge) -> Binding<Int> {
+        Binding<Int>(
+            get: { PassClock.wheelMinutes(kant == .start ? start : stopp) },
+            set: { (m: Int) -> Void in
+                let ny: Date = PassClock.date(wheelMinutes: m, near: kant == .start ? start : stopp)
+                let t = PassEdit.set(start: start, stop: stopp, edge: kant, to: ny, limits: gränser)
+                start = t.start
+                stopp = t.stop
+            })
+    }
+
     var body: some View {
-        VStack(spacing: 8) {
-            rad("Start", start, .start, ursprung?.start)
-            rad("Slut", stopp, .stop, ursprung?.stopp)
-        }
-    }
-
-    private func rad(_ namn: String, _ tid: Date, _ kant: PassEdit.Edge, _ förut: Date?) -> some View {
-        HStack(spacing: 6) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(namn).font(.system(size: 12)).foregroundStyle(Tema.dim)
-                Text(PassMarkningText.klockslag(tid))
-                    .font(Font.system(size: 20, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(Tema.text)
-                if let f = förut, abs(f.timeIntervalSince(tid)) >= 30 {
-                    Text("var " + PassMarkningText.klockslag(f))
-                        .font(Font.system(size: 11).monospacedDigit())
-                        .foregroundStyle(Tema.dim)
-                }
-            }
-            Spacer(minLength: 4)
-            ForEach([-5, -1, 1, 5], id: \.self) { (m: Int) in
-                Button { flytta(kant, m) } label: {
-                    Text(m > 0 ? "+\(m)" : "−\(-m)")
-                        .font(Font.system(size: 14, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(Tema.text)
-                        .frame(width: 44, height: 36)
-                        .background(Capsule().fill(Tema.card2))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(namn) \(m > 0 ? "\(m) minuter senare" : "\(-m) minuter tidigare")")
+        VStack(spacing: 12) {
+            Tidshjul(rubrik: "Start", minuter: hjul(.start))
+            Tidshjul(rubrik: "Slut", minuter: hjul(.stop))
+            if let u = ursprung, abs(u.start.timeIntervalSince(start)) >= 30 || abs(u.stopp.timeIntervalSince(stopp)) >= 30 {
+                Text("Var " + PassMarkningText.klockslag(u.start) + "–" + PassMarkningText.klockslag(u.stopp))
+                    .font(Font.system(size: 12).monospacedDigit())
+                    .foregroundStyle(Tema.dim)
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Tema.card, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    private func flytta(_ kant: PassEdit.Edge, _ minuter: Int) {
-        let ny = PassEdit.moved(start: start, stop: stopp, edge: kant, minutes: minuter, limits: gränser)
-        start = ny.start
-        stopp = ny.stop
     }
 }
 

@@ -38,8 +38,7 @@ struct MorningCardView: View {
                               idag: Self.idag(now: Date()), läge: Self.läge(recorder, now: Date()),
                               // BESLUT B136. Dra ner på Morgon: samma omläsning som när appen kommer fram.
                               laddar: recorder.fetching || recorder.computingNights,
-                              laddaOm: { recorder.refresh() },
-                              kvitto: Self.kvitto(recorder, now: Date()))
+                              laddaOm: { recorder.refresh() })
         }
         .onChange(of: recorder.summaries, initial: true) { dagar = Self.days(summaries: recorder.summaries) }
         .task(id: senasteNatt) {
@@ -80,32 +79,6 @@ struct MorningCardView: View {
         let lucka: ClosedRange<Date>? = Morgonläge.lucka(minuter: recorder.status.k18Minutes, från: fönsterStart, nu: now)
         return Morgonläge.nu(ansluten: recorder.link == .connected, hämtar: recorder.fetching,
                              räknar: recorder.computingNights, dataTill: till, hämtatTill: hämtat, lucka: lucka)
-    }
-
-    /// BESLUT B159. Läget efter att användaren dragit ner: anslutningen, när bandet senast hördes och om något räknas.
-    /// Inga mätvärden. Draget räknar inget själv; det prövar samma regel som när appen öppnas.
-    static func kvitto(_ recorder: Recorder, now: Date) -> String {
-        var delar: [String] = [recorder.link == .connected ? "Bandet anslutet" : "Bandet inte anslutet"]
-        if let t = recorder.status.lastK18Heard { delar.append("hört " + klockslag(t, now: now)) }
-        if recorder.fetching {
-            delar.append("hämtar")
-        } else if recorder.computingNights {
-            delar.append("räknar natten")
-        } else if recorder.statusRead {
-            delar.append("allt räknat")
-        }
-        return delar.joined(separator: " · ")
-    }
-
-    /// "08:04" i dag, "i går 23:31", annars dag och månad.
-    static func klockslag(_ t: Date, now: Date) -> String {
-        let kal = Calendar.current
-        let tid: String = t.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-        if kal.isDate(t, inSameDayAs: now) { return tid }
-        if let igår = kal.date(byAdding: .day, value: -1, to: now), kal.isDate(t, inSameDayAs: igår) {
-            return "i går " + tid
-        }
-        return t.formatted(.dateTime.day().month(.abbreviated)) + " " + tid
     }
 
     /// BESLUT B52. Natten på senaste morgonen, om den kommer ur K18 (en gammal inspelning har inga lager
@@ -226,15 +199,12 @@ struct MorningCardScreen: View {
     /// (förhandsvisningen) finns inget att dra i.
     var laddar: Bool = false
     var laddaOm: (() -> Void)? = nil
-    /// BESLUT B159. Läget som står i luckan efter draget.
-    var kvitto: String? = nil
     @State private var vald: WakeDay?
 
     init(days: [MorningCard.Day], summaries: [WakeDay: NightSummary] = [:], alert: ListenerAlert? = nil,
          start: WakeDay? = nil, showsData: Bool = true, bundles: [WakeDay: NightLoader.CurveBundle] = [:],
          huvudtal: Huvudtal = .tom, loadsCurves: Bool = true, band: Bandstatus = .okänd,
-         idag: WakeDay? = nil, läge: Morgonläge? = nil, laddar: Bool = false, laddaOm: (() -> Void)? = nil,
-         kvitto: String? = nil) {
+         idag: WakeDay? = nil, läge: Morgonläge? = nil, laddar: Bool = false, laddaOm: (() -> Void)? = nil) {
         self.days = days
         self.summaries = summaries
         self.alert = alert
@@ -247,7 +217,6 @@ struct MorningCardScreen: View {
         self.läge = läge
         self.laddar = laddar
         self.laddaOm = laddaOm
-        self.kvitto = kvitto
         _vald = State(initialValue: start)
     }
 
@@ -331,7 +300,7 @@ struct MorningCardScreen: View {
                         if let kort = days.first(where: { (k: MorningCard.Day) -> Bool in k.day == dag }) {
                             MorningPage(card: kort, summary: summaries[kort.day], preloaded: bundles[kort.day],
                                         alert: kort.day == senaste ? alert : nil, huvudtal: huvudtal,
-                                        load: loadsCurves, laddar: laddar, laddaOm: laddaOm, kvitto: kvitto)
+                                        load: loadsCurves, laddar: laddar, laddaOm: laddaOm)
                         } else {
                             // BESLUT B125 · BESLUT B136. Dagens sida utan natt: samma sida som en morgon, tom på tal,
                             // med ett kort som säger vad som pågår.
@@ -339,7 +308,7 @@ struct MorningCardScreen: View {
                                         alert: alert, huvudtal: huvudtal, load: false,
                                         läge: läge ?? Morgonläge.nu(ansluten: false, hämtar: false, räknar: false,
                                                                     dataTill: nil, hämtatTill: nil),
-                                        laddar: laddar, laddaOm: laddaOm, kvitto: kvitto)
+                                        laddar: laddar, laddaOm: laddaOm)
                         }
                     }
                     .tag(dag)
@@ -523,12 +492,11 @@ private struct MorningPage: View {
     var läge: Morgonläge? = nil
     var laddar: Bool = false
     var laddaOm: (() -> Void)? = nil
-    var kvitto: String? = nil
     @State private var bundle: NightLoader.CurveBundle?
 
     var body: some View {
         // BESLUT B136. Dra ner för att läsa om, med Idunns egen pil och ring i stället för systemets snurra.
-        DraNer(laddar: laddar, ladda: laddaOm, kvitto: kvitto) {
+        DraNer(laddar: laddar, ladda: laddaOm) {
             MorningCardStack(card: card, summary: summary, bundle: bundle ?? preloaded, alert: alert, huvudtal: huvudtal,
                              läge: läge)
         }

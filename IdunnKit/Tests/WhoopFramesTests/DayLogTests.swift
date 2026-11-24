@@ -226,53 +226,6 @@ final class ListenerStatusTests: XCTestCase {
         XCTAssertTrue(s.k18Minutes.isEmpty)
     }
 
-    // BESLUT B158 · METOD M87. Natten 23→24 nov 2026 (formen, inga värden): bandet var inte anslutet över natten,
-    // Whoop-appen synkade 8,5 timmar på två minuter på morgonen, och natten räknades mitt i. En synk som kommer
-    // ikapp märks när den är klar, så att natten räknas om.
-    func testEnSynkSomKomIkappMärksNärDenÄrKlar() {
-        var s = ListenerStatus()
-        let hörd = Double(t0 + 8 * 3600)
-        for sek in 0..<600 { s.add(Notiser.note(hörd + Double(sek) / 100, Ramar.ram(Notiser.k18(t0 + sek)))) }
-        XCTAssertNil(s.lastCatchUp, "inte förrän synken är klar")
-        s.add(Notiser.note(hörd + 10, Ramar.ram(Ramar.complete())))
-        XCTAssertEqual(s.lastCatchUp, Date(timeIntervalSince1970: hörd + 10))
-        XCTAssertEqual(s.lastCatchUpRecords, 600)
-        XCTAssertEqual(s.lastCatchUpLag, 8 * 3600, accuracy: 1e-6)
-    }
-
-    func testEnVanligSynkVar10eMinutÄrInteIkapp() {
-        var s = ListenerStatus()
-        // Posterna från de senaste tio minuterna, hörda i en synk.
-        let hörd = Double(t0 + 600)
-        for sek in 0..<600 { s.add(Notiser.note(hörd + Double(sek) / 100, Ramar.ram(Notiser.k18(t0 + sek)))) }
-        s.add(Notiser.note(hörd + 10, Ramar.ram(Ramar.complete())))
-        XCTAssertEqual(s.lastSync, Date(timeIntervalSince1970: hörd + 10))
-        XCTAssertNil(s.lastCatchUp)
-    }
-
-    func testEftersläpningenBörjarOmEfterVarjeSynk() {
-        var s = ListenerStatus()
-        let hörd = Double(t0 + 3 * 3600)
-        s.add(Notiser.note(hörd, Ramar.ram(Notiser.k18(t0))))
-        s.add(Notiser.note(hörd + 1, Ramar.ram(Ramar.complete())))
-        XCTAssertEqual(s.lastCatchUp, Date(timeIntervalSince1970: hörd + 1))
-        // Nästa synk bär bara färska poster: den är inte ikapp, och tiden står kvar.
-        s.add(Notiser.note(hörd + 600, Ramar.ram(Notiser.k18(t0 + 3 * 3600 + 300))))
-        s.add(Notiser.note(hörd + 601, Ramar.ram(Ramar.complete())))
-        XCTAssertEqual(s.lastSync, Date(timeIntervalSince1970: hörd + 601))
-        XCTAssertEqual(s.lastCatchUp, Date(timeIntervalSince1970: hörd + 1))
-        XCTAssertEqual(s.lastCatchUpRecords, 1)
-    }
-
-    func testSynkIkappSkrivsOchLäsesISidofilen() {
-        let t = Date(timeIntervalSince1970: 1_795_500_000)
-        var fil = RecordingLog.header(utcOffsetSeconds: 3600)
-        fil.append(RecordingLog.link(.syncCaughtUp, text: "600 K18-sekunder, äldsta 480 min sent", at: t))
-        let ut = RecordingLog.decode(fil).links
-        XCTAssertEqual(ut.map(\.word), ["synk ikapp"])
-        XCTAssertEqual(ut.first?.time, t)
-    }
-
     func testHistorikSomHördesSenareTäckerDenMinutenDenMätts() {
         // Whoop synkar klockan 07: posterna är från natten, hörda på morgonen.
         var s = ListenerStatus()

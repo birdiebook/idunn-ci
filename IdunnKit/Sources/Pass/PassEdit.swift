@@ -76,15 +76,21 @@ public enum PassEdit {
     public static func moved(start: Date, stop: Date, edge: Edge, minutes: Int, limits: Limits)
         -> (start: Date, stop: Date) {
         let steg: TimeInterval = TimeInterval(minutes * 60)
+        return set(start: start, stop: stop, edge: edge, to: (edge == .start ? start : stop).addingTimeInterval(steg),
+                   limits: limits)
+    }
+
+    /// BESLUT B158. Start och slut med kanten `edge` satt till `time` (ur tidshjulet), klampad som `moved`: inom
+    /// gränserna och så att passet är minst `shortestSeconds` långt.
+    public static func set(start: Date, stop: Date, edge: Edge, to time: Date, limits: Limits)
+        -> (start: Date, stop: Date) {
         switch edge {
         case .start:
-            let ny: Date = start.addingTimeInterval(steg)
             let senast: Date = stop.addingTimeInterval(-shortestSeconds)
-            return (min(max(ny, limits.earliest), max(limits.earliest, senast)), stop)
+            return (min(max(time, limits.earliest), max(limits.earliest, senast)), stop)
         case .stop:
-            let ny: Date = stop.addingTimeInterval(steg)
             let tidigast: Date = start.addingTimeInterval(shortestSeconds)
-            return (start, max(min(ny, limits.latest), min(limits.latest, tidigast)))
+            return (start, max(min(time, limits.latest), min(limits.latest, tidigast)))
         }
     }
 

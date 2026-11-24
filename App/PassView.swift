@@ -38,6 +38,7 @@ struct PassView: View {
                                         läggTillFörslag: { controller.läggTill($0, val: $1) },
                                         taBortFörslag: { controller.taBortFörslag($0) },
                                         förhandsFörslag: { controller.förhandsvisa($0, val: $1) },
+                                        läggTillManuellt: { controller.läggTillManuellt($0, start: $1, stopp: $2) },
                                         ändra: { controller.ändra($0, label: $1, start: $2, stopp: $3) }),
                    kondition: PassKondition(modell: kondition, slut: controller.steptestSlut,
                                           slag: controller.steptestSlag),
@@ -82,6 +83,8 @@ struct PassActions {
     var förhandsFörslag: (PassDetection.Candidate, PassForslagsval) -> Pass? = { _, _ in nil }
     /// BESLUT B150. Ändrar ett sparat pass: märkningen och tiderna.
     var ändra: (Pass, PassLabel, Date, Date) -> Void = { _, _, _, _ in }
+    /// BESLUT B158. Lägger till ett pass för hand i efterhand: märkningen, Start och Stopp.
+    var läggTillManuellt: (PassLabel, Date, Date) -> Void = { _, _, _ in }
 }
 
 /// BESLUT B150. Det som valts i förslagsbladet: märkningen och tiderna.
@@ -153,6 +156,7 @@ struct PassScreen: View {
     @State private var openedID: UUID?
     @State private var valtFörslag: Förslagsval?
     @State private var steptestBlad = false
+    @State private var manuellBlad = false
     @State private var konditionÖppen = false
     @State private var startBlad = false
     @State private var traningÖppen = false
@@ -293,6 +297,17 @@ struct PassScreen: View {
                 .presentationDetents([.large])
                 .presentationBackground(Tema.bg)
         }
+        // BESLUT B158. Bladet för ett pass som läggs till för hand i efterhand.
+        .sheet(isPresented: $manuellBlad) {
+            PassManuellBlad(finns: saved,
+                            läggTill: { (l: PassLabel, a: Date, b: Date) -> Void in
+                                actions.läggTillManuellt(l, a, b)
+                                manuellBlad = false
+                            },
+                            avbryt: { manuellBlad = false })
+                .presentationDetents([.large])
+                .presentationBackground(Tema.bg)
+        }
         .sensoryFeedback(.impact, trigger: phase)
     }
 
@@ -307,6 +322,9 @@ struct PassScreen: View {
             PassHuvud(idag: passIdag,
                       ute: actions.startUte,
                       steptest: { steptestBlad = true })
+
+            // BESLUT B158. Ett pass som inte hittades: lägg till det för hand.
+            PassManuellKnapp(öppna: { manuellBlad = true })
 
             // BESLUT B126 · BESLUT B133. Veckan hittills i två rutor; hela kortet öppnar veckans sida.
             if let v = vecka, v.hasTraining {
@@ -777,6 +795,13 @@ struct PassDetail: View {
                             .font(.system(size: 14))
                             .foregroundStyle(Tema.text)
                             .padding(.top, 6)
+                    }
+                    // BESLUT B158. Ett pass som lagts till för hand i efterhand säger det, i grått.
+                    if pass.addedByHand == true {
+                        Text("Tillagt i efterhand")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Tema.dim)
+                            .padding(.top, 4)
                     }
                 }
                 PassTreTal(pass: pass)

@@ -231,6 +231,22 @@ struct PassHuvud: View {
     }
 }
 
+/// BESLUT B158. Knappen under huvudet i vila: öppnar bladet för ett pass som läggs till för hand i efterhand.
+struct PassManuellKnapp: View {
+    let öppna: () -> Void
+
+    var body: some View {
+        Button(action: öppna) {
+            Label("Lägg till i efterhand", systemImage: "plus")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Tema.text)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .background(Capsule().fill(Tema.card))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 /// BESLUT B133. Veckokortet: tiden mot snittet och belastningen (eller sträckan) i två rutor, zonerna som en remsa.
 /// Hela kortet och pilen öppnar veckans sida.
 struct VeckaRutor: View {

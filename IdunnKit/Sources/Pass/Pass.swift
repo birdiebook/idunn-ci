@@ -123,11 +123,14 @@ public struct Pass: Codable, Equatable, Identifiable, Sendable {
     /// BESLUT B150 · METOD M85. Förslaget passet kom ur, som det var när det lades till: facit för passupptäckten.
     /// `nil` för ett pass som startats för hand och i en fil från ett äldre bygge.
     public var suggested: PassOrigin?
+    /// BESLUT B158. `true` när passet lades till för hand i efterhand (`PassManual`); annars `nil`. Ett sådant pass räknas
+    /// som ett vanligt pass överallt annars. En fil från ett äldre bygge saknar nyckeln.
+    public var addedByHand: Bool?
 
     public init(id: UUID = UUID(), start: Date, stop: Date? = nil, afterEnd: Date? = nil,
                 kind: PassKind? = nil, samples: [PassSample] = [], track: [TrackPoint]? = nil,
                 stepHeightCm: Double? = nil, historyThrough: Date? = nil, customKind: String? = nil,
-                note: String? = nil, suggested: PassOrigin? = nil) {
+                note: String? = nil, suggested: PassOrigin? = nil, addedByHand: Bool? = nil) {
         self.id = id
         self.start = start
         self.stop = stop
@@ -140,6 +143,7 @@ public struct Pass: Codable, Equatable, Identifiable, Sendable {
         self.customKind = customKind
         self.note = note
         self.suggested = suggested
+        self.addedByHand = addedByHand
     }
 
     /// BESLUT B150. Namnet på passets typ: den egna typen, annars den fasta, annars "Pass".

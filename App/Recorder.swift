@@ -154,8 +154,6 @@ final class Recorder: NSObject, ObservableObject {
     private var seeded = false
     /// BESLUT B125. Nätterna räknas just nu: Morgon säger det (`Morgonläge`). Läsbar utifrån, skrivs bara här.
     @Published private(set) var computingNights = false
-    /// BESLUT B159. Nätter som bads räknas om medan en räkning pågick: med i nästa.
-    private var forcedAgain: Set<WakeDay> = []
     /// METOD M55. En ändring kom medan nätterna räknades: räkna en gång till när den räkningen är klar.
     private var computeAgain = false
 
@@ -412,8 +410,6 @@ final class Recorder: NSObject, ObservableObject {
                 self.statusRead = läst
                 self.liveStatus.merge(inläst)
                 self.status = self.liveStatus
-                // BESLUT B159. Nu är minuterna kända: en natt som räknats utan dem prövas mot dem.
-                if läst, !self.startUppskjuten { self.computeNights() }
             }
         }
     }
@@ -509,22 +505,16 @@ final class Recorder: NSObject, ObservableObject {
 
     /// METOD M28. Räknar nätterna ur K18 som är dags att räkna (`NightLedger`)
     /// på en bakgrundskö, en i taget, och publicerar listan när något ändrats.
-    /// Bara en räkning åt gången; ett anrop under tiden prövar en gång till efteråt.
-    /// BESLUT B159. Med minuterna telefonen har (när statusen är läst) och om appen är öppen: en natt med ny data räknas
-    /// om, en pågående bara när appen är öppen. `forced` räknas om oavsett.
-    private func computeNights(forced: Set<WakeDay> = []) {
+    /// Bara en räkning åt gången; en öppning under tiden startar ingen till.
+    private func computeNights() {
         guard !computingNights else {
             // METOD M55. En ändring som sparades under räkningen kanske inte hann läsas: en gång till efteråt.
-            // BESLUT B159. Detsamma för ny data: en prövning till är billig när inget är nytt.
-            computeAgain = true
-            forcedAgain.formUnion(forced)
+            if recomputingEdit { computeAgain = true }
             return
         }
         computingNights = true
-        let minuter: Set<Int>? = seeded ? liveStatus.k18Minutes : nil
-        let vaken: Bool = UIApplication.shared.applicationState == .active
         DispatchQueue.global(qos: .utility).async {
-            let ändrat = K18Nights.computeDue(minutes: minuter, awake: vaken, forced: forced)
+            let ändrat = K18Nights.computeDue()
             let gamla = NightFiles.stems().compactMap(NightSummary.load)
             let k18 = ändrat ? K18Nights.summaries() : []
             DispatchQueue.main.async {
@@ -535,21 +525,12 @@ final class Recorder: NSObject, ObservableObject {
                 }
                 if self.computeAgain {
                     self.computeAgain = false
-                    let igen: Set<WakeDay> = self.forcedAgain
-                    self.forcedAgain = []
-                    self.computeNights(forced: igen)
+                    self.computeNights()
                 } else {
                     self.recomputingEdit = false
                 }
             }
         }
-    }
-
-    /// BESLUT B159. Räkna om nätterna på Data: de tre senaste uppvakningsdagarna räknas om oavsett ny data. Reserven
-    /// om den automatiska regeln skulle missa något; i vardagen behövs den inte.
-    func recomputeRecentNights(now: Date = Date()) {
-        let idag = WakeDay(now, utcOffsetSeconds: TimeZone.current.secondsFromGMT(for: now))
-        computeNights(forced: [idag, idag - 1, idag - 2])
     }
 
     /// METOD M55 · BESLUT B70. Sparar användaren ändring av sömnperioden för dagen (`nil` = Återställ) och räknar om
@@ -705,16 +686,7 @@ final class Recorder: NSObject, ObservableObject {
         let f = RawFrame(time: Date(), characteristic: uuid.uuidString, bytes: [UInt8](data))
         save(f)
         liveTally.add(f)
-        let ikappFöre: Date? = liveStatus.lastCatchUp
-        let synkFöre: Date? = liveStatus.lastSync
         liveStatus.add(f)
-        // BESLUT B158. Bandet skickade det som inte synkats på en stund: det står i loggen.
-        if liveStatus.lastCatchUp != ikappFöre, !fetching { syncCaughtUp() }
-        // BESLUT B159. En färdig synk kan ha gett nattens fönster nya minuter: `NightLedger` avgör om något räknas om.
-        if liveStatus.lastSync != synkFöre, !startUppskjuten {
-            _ = frameFile?.sync()
-            computeNights()
-        }
         publishSoon(f.time)
         // PLAN.md A3. En notis väcker appen: dags att hämta?
         considerAutoFetch()
@@ -729,13 +701,6 @@ final class Recorder: NSObject, ObservableObject {
         if pulse.isArmed { tickPulse() }
         guard fetching else { return }
         if let frame = stream.add(f), let actions = session?.receive(frame, now: f.time) { run(actions) }
-    }
-
-    /// BESLUT B158 · METOD M87. En synk som Idunn hörde kom ikapp: i loggen, så att en natt utan anslutning syns i
-    /// efterhand. Natten räknas om av synken som alla andra (BESLUT B159).
-    private func syncCaughtUp() {
-        let minuter = Int(liveStatus.lastCatchUpLag / 60)
-        logEvent(.syncCaughtUp, text: "\(liveStatus.lastCatchUpRecords) K18-sekunder, äldsta \(minuter) min sent")
     }
 
     // MARK: Hämtningen

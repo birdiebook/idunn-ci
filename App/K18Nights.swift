@@ -56,10 +56,7 @@ enum K18Nights {
 
     /// Räknar nätterna som `NightLedger` säger är dags, nyaste först. Ger
     /// sant om något sparades. Läser tiotals MB per natt: körs aldrig på huvudkön.
-    /// BESLUT B159. `minutes` är minuterna med K18 som telefonen har (`nil`: okänt), `awake` att appen är öppen och
-    /// `forced` nätter som räknas om oavsett (Räkna om nätterna på Data).
-    static func computeDue(now: Date = Date(), minutes: Set<Int>? = nil, awake: Bool = true,
-                           forced: Set<WakeDay> = []) -> Bool {
+    static func computeDue(now: Date = Date()) -> Bool {
         let zon: Int = TimeZone.current.secondsFromGMT(for: now)
         var ändrat = false
         NightLedger.computeDue(dayStems: NightFiles.dayStems(), recordingStems: NightFiles.stems(),
@@ -69,9 +66,21 @@ enum K18Nights {
                 NightFiles.write(data, to: entryURL(post.wakeDay))
                 ändrat = true
             }
-        }, sound: SoundFiles.analyzer(writeSummary: true), edits: SleepEditFile.load(), minutes: minutes,
-           awake: awake, forced: forced)
+        }, sound: SoundFiles.analyzer(writeSummary: true), edits: SleepEditFile.load(), fetches: fetchEnds())
         return ändrat
+    }
+
+    /// PLAN.md A3. När Idunns egna hämtningar slutade, ur sidofilerna för de fyra senaste dygnen (längre bak läser
+    /// ingen natt som kan räknas om av en hämtning). Bara tider, inga värden.
+    static func fetchEnds() -> [Date] {
+        var ut: [Date] = []
+        for stem in NightFiles.dayStems().sorted().suffix(4) {
+            guard let side = try? Data(contentsOf: NightFiles.pulse(stem)) else { continue }
+            for l in RecordingLog.decode(side).links where RecordingLog.fetchEnds.contains(l.word) {
+                ut.append(l.time)
+            }
+        }
+        return ut
     }
 
     /// En fil som IdunnKit ber om, dygn eller inspelning (samma tre filer med
