@@ -1,0 +1,4 @@
+6f4ca497285638869a6b562921bc356d229478ac spegel 2026-11-24T16:52:47Z run 45436881009
+== app (xcodebuild build-for-testing, simulator)
+RÖTT: bygget föll (kod 65),        1 felrader
+App/PassView.swift:42:41: error: argument 'ändra' must precede argument 'läggTillManuellt'
