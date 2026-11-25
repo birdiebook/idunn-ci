@@ -64,7 +64,7 @@ final class IdunNightsTests: XCTestCase {
         let period = try XCTUnwrap(Regularity.Episode.idun(onset: Date(timeIntervalSince1970: midnatt - 90 * 60),
                                                          wake: Date(timeIntervalSince1970: midnatt + 405 * 60),
                                                          utcOffsetSeconds: zon, sleepMinutes: 450))
-        let urPerioden = Trends.IdunNight(day: dag, validWindows: 1, rmssd: nil, restingHeartRate: nil,
+        let urPerioden = Trends.IdunNight(day: dag, validWindows: 40, rmssd: nil, restingHeartRate: nil,
                                           breathsPerMinute: nil, sleepHours: 7.5, sleepEpisode: period, source: .k18)
         let urMinuterna = Trends.IdunNight(day: dag + 1, validWindows: 40, rmssd: nil, restingHeartRate: nil,
                                            breathsPerMinute: nil, sleepHours: 7, source: .k18,
@@ -86,5 +86,32 @@ final class IdunNightsTests: XCTestCase {
         let utan = Trends.IdunNight(day: dag, validWindows: 40, rmssd: nil, restingHeartRate: nil, breathsPerMinute: nil,
                                     source: .k18)
         XCTAssertNil(SleepNight(utan))
+    }
+
+    /// BESLUT B161. En natt som bandet bara hörde en bit av (färre giltiga fönster än vyerna kräver) saknas: den visas
+    /// inte, och skulden står still över den i stället för att växa med nästan ett helt behov.
+    func testNattenSomBaraHördesEnBitSaknasOchSkuldenStårStill() throws {
+        let dag = WakeDay(daysSince1970: 20_000)
+        func natt(_ i: Int, timmar: Double, fönster: Int) -> Trends.IdunNight {
+            Trends.IdunNight(day: dag + i, validWindows: fönster, rmssd: nil, restingHeartRate: nil,
+                             breathsPerMinute: nil, sleepHours: timmar, source: .k18,
+                             onsetMinutes: -30, wakeMinutes: 420)
+        }
+        // Dag 2: en och en halv timme sovtid ur en natt som bara hördes en bit.
+        let bit = natt(2, timmar: 1.5, fönster: Trends.minValidWindows - 1)
+        let idun = [natt(0, timmar: 7, fönster: 80), natt(1, timmar: 6, fönster: 80), bit,
+                    natt(3, timmar: 7.5, fönster: 80)]
+        XCTAssertNil(SleepNight(bit))
+        XCTAssertNil(SleepNeed.k18PerDay(idun)[20_002])
+        XCTAssertNotNil(SleepNight(natt(2, timmar: 1.5, fönster: Trends.minValidWindows)), "gränsen räknas")
+        // Samma natt som vyerna: Trends visar ingen sömn dag 2.
+        XCTAssertNil(Trends.idunValues(idun)[.sleep]?[dag + 2])
+
+        let dagar = SleepNeed.days(nights: SleepNeed.nights(idun), passes: [])
+        XCTAssertEqual(dagar.map(\.day), Array(20_000...20_003))
+        let saknad = try XCTUnwrap(dagar.first { $0.day == 20_002 })
+        let före = try XCTUnwrap(dagar.first { $0.day == 20_001 })
+        XCTAssertNil(saknad.sleptMinutes)
+        XCTAssertEqual(saknad.debtMinutes, före.debtMinutes, accuracy: 1e-9, "skulden står still")
     }
 }

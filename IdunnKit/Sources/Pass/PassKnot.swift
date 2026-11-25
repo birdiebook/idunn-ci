@@ -63,9 +63,6 @@ extension PassDetection {
         /// BESLUT B159. Bastun: förhöjda följder med högst så här många minuter emellan är ett pass (rundorna med
         /// svalkan emellan).
         public let saunaJoin = 20
-        /// BESLUT B159. Bastun: inom kanterna ligger den varmaste minuten minst så här många grader över dygnets
-        /// hudmedian.
-        public let saunaHeat = 3.0
 
         public init() {}
     }
@@ -108,18 +105,13 @@ extension PassDetection {
     }
 
     /// BESLUT B159 · METOD M69. Bastun i knuten K3: förhöjda minuter mot dygnets egen nivå (N + `over`) i följder om
-    /// minst `edgeMinutes` minuter som inte rör någon av knutens perioder (`taken`), fogade till ett pass när det är
-    /// högst `saunaJoin` minuter emellan. Passet behålls när det har minst `Rules.minElevatedMinutes` förhöjda minuter
-    /// och pulsdosen Σ(puls − N − `over`) når `dose`. Kanten dras in till första och sista följden av minst
-    /// `edgeMinutes` minuter med pulsen minst passets egen median, och inom kanterna ligger den varmaste minuten minst
-    /// `saunaHeat` grader över dygnets hudmedian. Rörelsen krävs inte. `tools/pass_hitta.py` (`perioder_bastu`)
-    /// räknar samma sak.
+    /// minst `edgeMinutes` minuter, fogade till ett pass när det är högst `saunaJoin` minuter emellan. Passet behålls
+    /// när det har minst `Rules.minElevatedMinutes` förhöjda minuter, inte rör någon av knutens perioder (`taken`),
+    /// och huden blivit varm mot minuterna före (`heat`, samma regel som B120). Rörelsen krävs inte.
+    /// `tools/pass_hitta.py` (`perioder_bastu`) räknar samma sak.
     static func saunaPeriods(_ perMinut: [Int: Minute], timeZone: TimeZone, knot: Knot,
                              besides taken: [KnotPeriod]) -> [KnotPeriod] {
         let regler = Rules()
-        func rör(_ a: Int, _ b: Int) -> Bool {
-            taken.contains { (t: KnotPeriod) -> Bool in t.start <= b && a <= t.end }
-        }
         var grupper: [Int: [Minute]] = [:]
         for k in perMinut.keys.sorted() {
             if let m = perMinut[k] { grupper[dayKey(k, timeZone), default: []].append(m) }
@@ -128,11 +120,8 @@ extension PassDetection {
         for nyckel in grupper.keys.sorted() {
             let dag: [Minute] = grupper[nyckel] ?? []
             let pulser: [Double] = dag.compactMap { (m: Minute) -> Double? in m.pulse }
-            let hudar: [Double] = dag.compactMap { (m: Minute) -> Double? in m.skinTemperature }
-            if pulser.isEmpty || hudar.isEmpty { continue }
-            let nivå: Double = medianOf(pulser)
-            let hudnivå: Double = medianOf(hudar)
-            let gräns: Double = nivå + knot.over
+            if pulser.isEmpty { continue }
+            let gräns: Double = medianOf(pulser) + knot.over
             var lista: [(minute: Int, reserve: Double)] = []
             for m in dag {
                 if let p = m.pulse, p >= gräns { lista.append((m.minute, 0)) }
@@ -142,57 +131,26 @@ extension PassDetection {
                 if let a = f.first?.minute, let b = f.last?.minute { följder.append((a, b)) }
             }
             följder = joinRuns(följder, gap: knot.joinGap).filter { (r: (Int, Int)) -> Bool in
-                r.1 - r.0 + 1 >= knot.edgeMinutes && !rör(r.0, r.1)
+                r.1 - r.0 + 1 >= knot.edgeMinutes
             }
-            for (a0, b0) in joinRuns(följder, gap: knot.saunaJoin) {
-                if rör(a0, b0) { continue }
-                var pp: [Double] = []
-                for m in a0...b0 {
-                    if let p = perMinut[m]?.pulse { pp.append(p) }
+            for (a, b) in joinRuns(följder, gap: knot.saunaJoin) {
+                let rörs: Bool = taken.contains { (t: KnotPeriod) -> Bool in t.start <= b && a <= t.end }
+                if rörs { continue }
+                var iPasset: [Minute] = []
+                for m in a...b {
+                    if let x = perMinut[m] { iPasset.append(x) }
                 }
-                if pp.isEmpty { continue }
+                var före: [Minute] = []
+                for m in (a - regler.baselineMinutes)..<a {
+                    if let x = perMinut[m] { före.append(x) }
+                }
                 var förhöjda = 0
-                var dos = 0.0
-                for p in pp {
-                    if p >= gräns { förhöjda += 1 }
-                    if p > 0 { dos += p - nivå - knot.over }
+                for x in iPasset {
+                    if let p = x.pulse, p >= gräns { förhöjda += 1 }
                 }
-                if förhöjda < regler.minElevatedMinutes || dos < knot.dose { continue }
-                // Kanten: första och sista följden av minst `edgeMinutes` minuter med pulsen minst passets median.
-                let mitt: Double = medianOf(pp)
-                var a: Int = a0
-                var b: Int = b0
-                var första: Int?
-                var sista: Int?
-                var m: Int = a0
-                while m <= b0 {
-                    if let p = perMinut[m]?.pulse, p >= mitt {
-                        var j: Int = m
-                        while j + 1 <= b0, let q = perMinut[j + 1]?.pulse, q >= mitt { j += 1 }
-                        if j - m + 1 >= knot.edgeMinutes {
-                            if första == nil { första = m }
-                            sista = j
-                        }
-                        m = j + 1
-                    } else {
-                        m += 1
-                    }
+                if förhöjda >= regler.minElevatedMinutes && heat(inPass: iPasset, before: före, rules: regler) == true {
+                    ut.append((a, b, förhöjda))
                 }
-                if let f = första, let l = sista {      // annars behålls passets kanter
-                    a = f
-                    b = l
-                }
-                // Huden läses där pulsen säger att passet är: inte i värmen som fanns kvar före.
-                var varmast: Double?
-                for k in a...b {
-                    if let t = perMinut[k]?.skinTemperature { varmast = max(varmast ?? t, t) }
-                }
-                guard let v = varmast, v - hudnivå >= knot.saunaHeat else { continue }
-                var n = 0
-                for k in a...b {
-                    if let p = perMinut[k]?.pulse, p >= gräns { n += 1 }
-                }
-                ut.append((a, b, n))
             }
         }
         return ut

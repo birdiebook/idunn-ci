@@ -149,39 +149,23 @@ final class PassKnotTests: XCTestCase {
     }
 
     /// BESLUT B159. Syftesprovet: bastu är en av passens typer (PLAN.md spåret P), och knuten kräver rörelse. Ett
-    /// stilla pass med förhöjd puls och varm hud ska hittas som bastu; utan varm hud eller med för liten pulsdos är det
-    /// inget pass. Dygnets nivå är pulsen 60 och huden 33 °C, så gränsen är 80 slag och 36 °C.
+    /// stilla pass med förhöjd puls och varm hud ska hittas som bastu; utan varm hud är det inget pass.
     func testBastunHittasIStillhetPåVarmHud() {
         let start: Int = (20_000 * 86_400 + 3_600) / 60 + 300
-        let varm: [PassDetection.Candidate] = bastun(stillaDygn([(minuter: 25, puls: 110, hud: 39)]))
+        let varm: [PassDetection.Candidate] = bastun(stillaDygn([(minuter: 25, puls: 100, hud: 39)]))
         XCTAssertEqual(varm.map { (c: PassDetection.Candidate) -> Int in c.startMinute }, [start])
         XCTAssertEqual(varm.map { (c: PassDetection.Candidate) -> Int in c.endMinute }, [start + 24])
         XCTAssertEqual(varm.map { (c: PassDetection.Candidate) -> PassKind? in c.kind }, [PassKind.bastu])
-        XCTAssertEqual(bastun(stillaDygn([(minuter: 25, puls: 110, hud: 33)])), [])
-        XCTAssertEqual(bastun(stillaDygn([(minuter: 25, puls: 110, hud: 35.9)])), [])
-        XCTAssertEqual(bastun(stillaDygn([(minuter: 9, puls: 110, hud: 39)])), [])
-        // Pulsdosen (100 − 80) · 25 = 500 når inte 600.
-        XCTAssertEqual(bastun(stillaDygn([(minuter: 25, puls: 100, hud: 39)])), [])
+        XCTAssertEqual(bastun(stillaDygn([(minuter: 25, puls: 100, hud: 33)])), [])
+        XCTAssertEqual(bastun(stillaDygn([(minuter: 9, puls: 100, hud: 39)])), [])
         // Tre rundor om 12 minuter med 15 minuters svalka emellan är ett pass.
         let svalka: (minuter: Int, puls: Int, hud: Double) = (minuter: 15, puls: 65, hud: 35)
-        let runda: (minuter: Int, puls: Int, hud: Double) = (minuter: 12, puls: 120, hud: 39)
+        let runda: (minuter: Int, puls: Int, hud: Double) = (minuter: 12, puls: 100, hud: 39)
         let rundor: [PassDetection.Candidate] = bastun(stillaDygn([runda, svalka, runda, svalka, runda]))
         XCTAssertEqual(rundor.count, 1)
         XCTAssertEqual(rundor.first?.startMinute, start)
         XCTAssertEqual(rundor.first?.endMinute, start + 65)
         XCTAssertEqual(rundor.first?.kind, PassKind.bastu)
-    }
-
-    /// BESLUT B159. Formen ur två riktiga dygn, med påhittade tal. Gången dit med förhöjd puls dras bort: kanten följer
-    /// pulsen i bastun (passets median). In från kylan stiger huden mot kvarten före men når inte dygnets nivå + 3.
-    func testBastunsKantOchInFrånKylan() {
-        let start: Int = (20_000 * 86_400 + 3_600) / 60 + 300
-        let dit: [PassDetection.Candidate] = bastun(stillaDygn([(minuter: 15, puls: 95, hud: 33),
-                                                                (minuter: 60, puls: 140, hud: 39)]))
-        XCTAssertEqual(dit.count, 1)
-        XCTAssertEqual(dit.first?.startMinute, start + 15)
-        XCTAssertEqual(dit.first?.endMinute, start + 74)
-        XCTAssertEqual(bastun(stillaDygn([(minuter: 15, puls: 60, hud: 25), (minuter: 100, puls: 110, hud: 30)])), [])
     }
 
     func testIngenVilopulsOchTomtGerInget() {
